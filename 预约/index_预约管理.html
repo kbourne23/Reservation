@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>预约管理主原型入口</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --line: #d9e2ec;
+      --text: #172033;
+      --muted: #697586;
+      --primary: #0f766e;
+      --primary-soft: #e6f5f3;
+      --danger-soft: #fff1f2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .shell {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 300px 1fr;
+    }
+    .nav {
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .nav-head {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 6px;
+    }
+    .nav-subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .nav-body {
+      overflow: auto;
+      padding: 12px;
+    }
+    .group {
+      margin-bottom: 16px;
+    }
+    .group-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      padding: 8px 8px 6px;
+    }
+    .page-btn {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 13px;
+      line-height: 1.35;
+      cursor: pointer;
+    }
+    .page-btn:hover {
+      background: #f8fafc;
+      border-color: var(--line);
+    }
+    .page-btn.active {
+      background: var(--primary-soft);
+      border-color: #9fd7ce;
+      color: var(--primary);
+      font-weight: 700;
+    }
+    .main {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: 58px 1fr;
+    }
+    .topbar {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      min-width: 0;
+    }
+    .current-title {
+      font-size: 16px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .meta {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .viewer {
+      min-width: 0;
+      min-height: 0;
+      padding: 12px;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 6px;
+    }
+    .note {
+      margin: 10px 12px 12px;
+      padding: 10px;
+      border-radius: 6px;
+      background: var(--danger-soft);
+      border: 1px solid #fecdd3;
+      color: #9f1239;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; grid-template-rows: 42vh 58vh; }
+      .nav { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="nav">
+      <div class="nav-head">
+        <h1 class="nav-title">预约管理主原型</h1>
+        <div class="nav-subtitle">清理后入口，仅保留预约管理相关页面。</div>
+      </div>
+      <div class="nav-body" id="navBody"></div>
+      <div class="note">原 `index.html` 仍保留平台壳菜单；本入口用于项目接管和需求评审。</div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div class="current-title" id="currentTitle">中心站管理</div>
+        <div class="meta" id="currentMeta">05_appt_station.html</div>
+      </header>
+      <section class="viewer">
+        <iframe id="viewer" src="05_appt_station.html" title="预约管理页面预览"></iframe>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const groups = [
+      {
+        title: "基础配置",
+        pages: [
+          ["中心站管理", "05_appt_station.html"],
+          ["仓库管理", "05a_station_warehouse.html"],
+          ["绑定管理员", "05b_station_admin_bind.html"],
+          ["中心站详情", "05c_station_detail.html"],
+          ["作业面管理", "06_appt_area.html"],
+          ["最大个数设置", "06a_area_max_config.html"],
+          ["新增作业面", "06b_area_form.html"],
+          ["作业面详情", "06c_area_detail.html"],
+          ["预约类型管理", "12_appt_type.html"]
+        ]
+      },
+      {
+        title: "放号与审核",
+        pages: [
+          ["放号管理", "07_appt_slot.html"],
+          ["新增号段", "07a_slot_form.html"],
+          ["号段详情", "07b_slot_detail.html"],
+          ["号段审核", "13_appt_slot_review.html"]
+        ]
+      },
+      {
+        title: "预约办理",
+        pages: [
+          ["预约办理", "08_appt_booking.html"],
+          ["预约详情", "08a_booking_detail.html"],
+          ["调整预约", "08b_booking_adjust.html"],
+          ["取消预约确认", "08c_cancel_confirm.html"]
+        ]
+      },
+      {
+        title: "预约审核",
+        pages: [
+          ["预约审核", "09_appt_review.html"],
+          ["审核详情", "09a_review_detail.html"],
+          ["驳回原因", "09b_reject_reason.html"],
+          ["完结确认", "09c_complete_confirm.html"]
+        ]
+      },
+      {
+        title: "临时预约与统计",
+        pages: [
+          ["临时预约", "10_appt_temp.html"],
+          ["补充临时预约信息", "10a_temp_supplement.html"],
+          ["预约统计", "11_appt_stats.html"],
+          ["单位统计详情", "11a_unit_stats_detail.html"],
+          ["预约趋势分析", "11b_trend_charts.html"],
+          ["取消预约管理", "14_appt_cancel_config.html"]
+        ]
+      }
+    ];
+
+    const navBody = document.getElementById("navBody");
+    const viewer = document.getElementById("viewer");
+    const currentTitle = document.getElementById("currentTitle");
+    const currentMeta = document.getElementById("currentMeta");
+
+    function openPage(button, title, src) {
+      document.querySelectorAll(".page-btn.active").forEach((el) => el.classList.remove("active"));
+      button.classList.add("active");
+      viewer.src = src;
+      currentTitle.textContent = title;
+      currentMeta.textContent = src;
+    }
+
+    groups.forEach((group, groupIndex) => {
+      const section = document.createElement("section");
+      section.className = "group";
+
+      const heading = document.createElement("div");
+      heading.className = "group-title";
+      heading.textContent = group.title;
+      section.appendChild(heading);
+
+      group.pages.forEach(([title, src], pageIndex) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "page-btn";
+        button.textContent = title;
+        button.addEventListener("click", () => openPage(button, title, src));
+        if (groupIndex === 0 && pageIndex === 0) button.classList.add("active");
+        section.appendChild(button);
+      });
+
+      navBody.appendChild(section);
+    });
+  </script>
+</body>
+</html>

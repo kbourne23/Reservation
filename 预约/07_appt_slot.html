@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>放号管理 - 预约管理</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
+<style>
+:root{--primary:#0D9488;--primary-dark:#0F766E;--primary-light:#14B8A6;--primary-lighter:#CCFBF1;--primary-lightest:#F0FDFA;--success:#10B981;--success-light:#D1FAE5;--warning:#F59E0B;--warning-light:#FEF3C7;--danger:#EF4444;--danger-light:#FEE2E2;--info:#06B6D4;--info-light:#CFFAFE;--bg-page:#F5F6F8;--bg-card:#FFFFFF;--border:#E5E7EB;--border-light:#F3F4F6;--text-main:#111827;--text-sub:#6B7280;--text-dim:#9CA3AF;--font-main:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;--font-mono:"JetBrains Mono","Consolas",monospace;--shadow-card:0 4px 20px rgba(13,148,136,0.08);--transition:250ms cubic-bezier(0.4,0,0.2,1);--transition-fast:150ms cubic-bezier(0.4,0,0.2,1)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-main);background:var(--bg-page);color:var(--text-main);padding:20px 28px}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:3px}
+.page-header{margin-bottom:24px}
+.page-header h1{font-size:22px;font-weight:700;color:var(--text-main);margin-bottom:4px}
+.page-header p{font-size:15px;color:var(--text-sub)}
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.btn{padding:8px 18px;border-radius:8px;font-size:14px;font-weight:500;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all var(--transition-fast);font-family:var(--font-main)}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-outline{background:#fff;color:var(--primary);border:1px solid var(--primary);}
+.btn-outline:hover{background:var(--primary-lightest)}
+.btn-danger{background:#fff;color:var(--danger);border:1px solid var(--danger)}
+.btn-danger:hover{background:var(--danger-light)}
+.btn-sm{padding:4px 12px;font-size:13px}
+.btn-xs{padding:2px 8px;font-size:12px;border-radius:6px}
+.btn-link{background:none;border:none;color:var(--primary);cursor:pointer;font-size:14px;padding:4px 8px}
+.btn-link:hover{color:var(--primary-dark);text-decoration:underline}
+.btn-link.danger{color:var(--danger)}
+.input{height:36px;padding:0 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:var(--font-main);background:#fff;color:var(--text-main);outline:none;transition:border var(--transition-fast)}
+.input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(13,148,136,0.1)}
+.input.sm{height:32px;font-size:13px;padding:0 10px}
+select.input{appearance:none;padding-right:32px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%236B7280' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+textarea.input{height:auto;padding:8px 12px;resize:vertical;min-height:80px}
+.card{background:var(--bg-card);border-radius:12px;border:1px solid var(--border);box-shadow:var(--shadow-card)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between}
+.card-header h2{font-size:16px;font-weight:600;color:var(--text-main)}
+.card-body{padding:20px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 14px;text-align:left;font-size:14px;border-bottom:1px solid var(--border-light)}
+th{background:#F9FAFB;color:var(--text-sub);font-weight:600;font-size:13px;white-space:nowrap}
+td{color:var(--text-main)}
+tr:hover td{background:#F9FAFB}
+.tag{padding:2px 10px;border-radius:20px;font-size:12px;font-weight:500;display:inline-block}
+.tag-success{background:var(--success-light);color:var(--success)}
+.tag-warning{background:var(--warning-light);color:var(--warning)}
+.tag-danger{background:var(--danger-light);color:var(--danger)}
+.tag-info{background:var(--info-light);color:var(--info)}
+.tag-default{background:#F3F4F6;color:var(--text-sub)}
+.stat-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--bg-card);border-radius:12px;border:1px solid var(--border);padding:20px;box-shadow:var(--shadow-card)}
+.stat-card .label{font-size:13px;color:var(--text-sub);margin-bottom:8px}
+.stat-card .value{font-size:28px;font-weight:700;color:var(--primary)}
+.stat-card .value.danger{color:var(--danger)}
+.stat-card .value.warning{color:var(--warning)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-grid.col-1{grid-template-columns:1fr}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group label{font-size:14px;font-weight:500;color:var(--text-main)}
+.form-group .hint{font-size:12px;color:var(--text-dim)}
+.form-actions{display:flex;gap:12px;margin-top:20px;padding-top:20px;border-top:1px solid var(--border-light)}
+.split-layout{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:900px){.split-layout{grid-template-columns:1fr}}
+.empty-state{text-align:center;padding:40px;color:var(--text-dim)}
+.empty-state i{font-size:40px;margin-bottom:12px}
+.toolbar .spacer{flex:1}
+.gap-8{display:flex;gap:8px;align-items:center}
+.gap-4{display:flex;gap:4px;align-items:center}
+
+/* 模态框 */
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal-box{background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.3);width:90%;max-width:700px;max-height:85vh;display:flex;flex-direction:column}
+.modal-box-header{padding:14px 20px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-box-header h3{font-size:17px;font-weight:600;color:var(--text-main)}
+.modal-box-close{width:32px;height:32px;border:none;background:none;color:var(--text-dim);font-size:18px;cursor:pointer;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.modal-box-close:hover{background:#F3F4F6;color:var(--text-main)}
+.modal-box-body{flex:1;overflow-y:auto;padding:0}
+.modal-box-body iframe{width:100%;height:100%;min-height:400px;border:none;display:block}
+</style>
+</head>
+<body>
+<div class="page-header"><h1>放号管理</h1><p>仓库管理员按小时创建号段，提交中心审核后供预约使用</p></div>
+
+<div class="toolbar">
+  <label style="font-size:14px;color:var(--text-sub)">仓库：</label>
+  <select class="input" style="width:200px"><option>星沙仓库</option><option>岳麓仓库</option></select>
+  <label style="font-size:14px;color:var(--text-sub);margin-left:12px">审核状态：</label>
+  <select class="input" style="width:140px"><option>全部</option><option>待提交</option><option>审核中</option><option>已通过</option><option>已驳回</option></select>
+  <div class="spacer"></div>
+  <button class="btn btn-primary"><i class="fas fa-plus"></i> 新增号段</button>
+  <button class="btn btn-outline"><i class="fas fa-paper-plane"></i> 提交审核</button>
+</div>
+
+<div class="card">
+  <div class="card-header"><h2>号段列表</h2><span style="font-size:13px;color:var(--text-dim)">本周（6月30日 - 7月4日）</span></div>
+  <div class="card-body" style="padding:0">
+    <table>
+      <thead><tr><th>序号</th><th>日期</th><th>时间段</th><th>作业面</th><th>预约类型</th><th>审核状态</th><th>操作</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>7月7日（周一）</td><td>8:30-9:30</td><td>1号卸货区</td><td>供应商到货</td><td><span class="tag tag-success">已通过</span></td><td><span class="tag tag-default">—</span></td></tr>
+        <tr><td>2</td><td>7月7日（周一）</td><td>9:30-10:30</td><td>1号卸货区</td><td>供应商到货</td><td><span class="tag tag-success">已通过</span></td><td><span class="tag tag-default">—</span></td></tr>
+        <tr><td>3</td><td>7月7日（周一）</td><td>10:30-11:30</td><td>2号卸货区</td><td>调配出库</td><td><span class="tag tag-info">审核中</span></td><td><span class="tag tag-default">—</span></td></tr>
+        <tr><td>4</td><td>7月8日（周二）</td><td>8:30-9:30</td><td>1号卸货区</td><td>施工领料</td><td><span class="tag tag-warning">待提交</span></td><td><div class="gap-4"><button class="btn-link" onclick="openModal('07a_slot_form.html','修改号段')">修改</button><button class="btn-link danger">删除</button></div></td></tr>
+        <tr><td>5</td><td>7月8日（周二）</td><td>9:30-10:30</td><td>电缆专用区</td><td>供应商到货</td><td><span class="tag tag-danger">已驳回</span></td><td><div class="gap-4"><button class="btn-link" onclick="openModal('07a_slot_form.html','修改号段')">修改重提</button></div></td></tr>
+        <tr><td>6</td><td>7月9日（周三）</td><td>14:30-15:30</td><td>1号卸货区</td><td>调配入库</td><td><span class="tag tag-warning">待提交</span></td><td><div class="gap-4"><button class="btn-link" onclick="openModal('07a_slot_form.html','修改号段')">修改</button><button class="btn-link danger">删除</button></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+
+<!-- 模态框 -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-box-header">
+      <h3 id="modalTitle">弹窗</h3>
+      <button class="modal-box-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-box-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+// 模态框逻辑
+function openModal(url, title) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = '<iframe src="'+url+'"></iframe>';
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+  document.getElementById('modalBody').innerHTML = '';
+}
+// 监听子页面postMessage
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'close') {
+    closeModal();
+  } else if (e.data && e.data.type === 'navigate') {
+    closeModal();
+    try { parent.openTab(e.data.pageId, '', '', null); } catch(ex) {}
+  }
+});
+</script>
+</body></html>

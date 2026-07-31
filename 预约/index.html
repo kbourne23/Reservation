@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>调配应用 - 国网湖南省电力有限公司</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ============================================================
+       全局设计令牌
+    ============================================================ */
+    :root {
+      --primary:          #0D9488;
+      --primary-dark:     #0F766E;
+      --primary-light:    #14B8A6;
+      --primary-lighter:  #CCFBF1;
+      --primary-lightest: #F0FDFA;
+      --success:          #10B981;
+      --success-light:    #D1FAE5;
+      --warning:          #F59E0B;
+      --warning-light:    #FEF3C7;
+      --danger:           #EF4444;
+      --danger-light:     #FEE2E2;
+      --info:             #06B6D4;
+      --info-light:       #CFFAFE;
+      --bg-page:          #F5F6F8;
+      --bg-card:          #FFFFFF;
+      --border:           #E5E7EB;
+      --border-light:     #F3F4F6;
+      --text-main:        #111827;
+      --text-sub:         #6B7280;
+      --text-dim:         #9CA3AF;
+      --font-main: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --font-mono: "JetBrains Mono", "Consolas", monospace;
+      --shadow-header:    0 2px 8px rgba(0,0,0,0.12);
+      --shadow-card:      0 4px 20px rgba(13,148,136,0.08);
+      --shadow-card-hover:0 8px 32px rgba(13,148,136,0.16);
+      --transition:       250ms cubic-bezier(0.4,0,0.2,1);
+      --transition-fast: 150ms cubic-bezier(0.4,0,0.2,1);
+      --sidebar-w:         320px;
+      --sidebar-w-min:    56px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-main);
+      background: var(--bg-page);
+      color: var(--text-main);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; font-family: inherit; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+
+    /* ============================================================
+       顶栏 Header
+    ============================================================ */
+    .top-header {
+      height: 60px;
+      background: var(--primary);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      flex-shrink: 0;
+      z-index: 100;
+      box-shadow: var(--shadow-header);
+      justify-content: space-between;
+    }
+    /* Logo */
+    .header-logo {
+      width: var(--sidebar-w-min);
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border-right: 1px solid rgba(255,255,255,0.15);
+    }
+    .header-logo-inner {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 700; color: #fff;
+    }
+    .header-center { flex: 1; padding: 0 16px; display: flex; align-items: center; gap: 16px; }
+    .header-title {
+      font-size: 22px; font-weight: 600; color: #fff;
+    }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .header-btn {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(14,132,121,0.3);
+      color: rgba(255,255,255,0.85);
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background var(--transition-fast);
+      position: relative;
+    }
+    .header-btn:hover { background: rgba(14,132,121,0.4); color: #fff; }
+    .header-btn .badge-dot {
+      position: absolute; top: 4px; right: 4px;
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #ef4444;
+    }
+    .header-time {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: rgba(255,255,255,0.85);
+      padding: 0 4px;
+    }
+    .header-divider {
+      width: 1px; height: 24px;
+      background: rgba(255,255,255,0.2);
+    }
+    /* 天气 */
+    .header-weather {
+      display: flex; align-items: center; gap: 5px;
+      color: rgba(255,255,255,0.8);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 5px 10px;
+      border-radius: 8px;
+      transition: background var(--transition-fast);
+      background: rgba(14,132,121,0.25);
+    }
+    .header-weather:hover { background: rgba(14,132,121,0.4); color: #fff; }
+    .header-weather i { font-size: 14px; }
+    .header-weather-temp { font-weight: 600; color: #fff; }
+    /* 用户 */
+    .header-user {
+      display: flex; align-items: center; gap: 8px;
+      cursor: pointer;
+      padding: 4px 10px 4px 4px;
+      border-radius: 8px;
+      transition: background var(--transition-fast);
+    }
+    .header-user:hover { background: rgba(14,132,121,0.4); }
+    .header-user-avatar {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1));
+      border: 1px solid rgba(255,255,255,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: #fff;
+    }
+    .header-user-name { font-size: 13px; color: rgba(255,255,255,0.9); }
+    .header-user i { font-size: 11px; color: rgba(255,255,255,0.5); }
+
+    /* ============================================================
+       主体区域
+    ============================================================ */
+    .app-body { flex: 1; display: flex; overflow: hidden; }
+
+    /* ============================================================
+       侧边栏 — Gmail式折叠
+       配色：背景 #0D9488，白色文字图标，撑满Header下方高度
+    ============================================================ */
+    .app-sidebar {
+      width: var(--sidebar-w-min);
+      background: #0D9488;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+      transition: width var(--transition);
+      position: relative;
+      z-index: 50;
+    }
+    /* 鼠标悬停时展开 */
+    .app-sidebar.expanded { width: var(--sidebar-w); }
+    /* 固定状态（点击图钉后） */
+    .app-sidebar.pinned { width: var(--sidebar-w); }
+
+    /* 搜索区 */
+    .sidebar-search {
+      height: 60px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      flex-shrink: 0;
+    }
+    .sidebar-search-input-wrap {
+      flex: 1;
+      position: relative;
+    }
+    .sidebar-search-input {
+      width: 100%;
+      height: 36px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 16px;
+      padding: 0 10px 0 34px;
+      outline: none;
+      transition: all var(--transition-fast);
+    }
+    .sidebar-search-input::placeholder { color: rgba(255,255,255,0.45); font-size: 16px; }
+    .sidebar-search-input:focus {
+      background: rgba(255,255,255,0.18);
+      border-color: rgba(255,255,255,0.35);
+    }
+    .sidebar-search-icon {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      color: rgba(255,255,255,0.5); font-size: 14px;
+    }
+    /* 折叠时只显示搜索图标 */
+    .app-sidebar:not(.expanded):not(.pinned) .sidebar-search-input-wrap { display: none; }
+    .app-sidebar:not(.expanded):not(.pinned) .sidebar-search-icon-only {
+      display: flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.6);
+      font-size: 14px;
+      cursor: pointer;
+      transition: background var(--transition-fast);
+    }
+    .app-sidebar:not(.expanded):not(.pinned) .sidebar-search-icon-only:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    .app-sidebar.expanded .sidebar-search-icon-only,
+    .app-sidebar.pinned .sidebar-search-icon-only { display: none; }
+
+    /* 导航区 */
+    .sidebar-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 0; }
+
+    /* 分组标题 */
+    .nav-group-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 12px 16px 6px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .nav-group-title .nav-short {
+      display: none;
+      font-size: 15px;
+      color: rgba(255,255,255,0.4);
+    }
+    .app-sidebar:not(.expanded):not(.pinned) .nav-group-title { display: none; }
+    .app-sidebar:not(.expanded):not(.pinned) .nav-group-title.nav-short { display: block; padding: 10px 0 4px; text-align: center; }
+
+    /* 菜单项 */
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 52px;
+      padding: 0 10px;
+      font-size: 16px;
+      color: rgba(255,255,255,0.8);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      transition: background var(--transition-fast), color var(--transition-fast);
+      position: relative;
+      white-space: nowrap;
+      overflow: hidden;
+      border-radius: 0;
+    }
+    .app-sidebar.expanded .nav-item,
+    .app-sidebar.pinned .nav-item { padding: 0 16px; }
+    .nav-item:hover { background: rgba(14,132,121,0.3); color: #fff; }
+    .nav-item.active {
+      background: #0E8479;
+      color: #fff;
+      font-weight: 500;
+    }
+    .nav-item.active::before { display: none; }
+    .nav-item-icon {
+      width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+    .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .app-sidebar:not(.expanded):not(.pinned) .nav-label { display: none; }
+
+    /* 角标 */
+    .nav-badge {
+      font-size: 14px; font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: var(--danger);
+      color: #fff;
+      min-width: 18px;
+      text-align: center;
+    }
+    .nav-badge.warn { background: rgba(255,255,255,0.25); color: #fff; }
+    .app-sidebar:not(.expanded):not(.pinned) .nav-badge { display: none; }
+
+    /* 子菜单下拉箭头 */
+    .nav-arrow {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      transition: transform var(--transition-fast);
+    }
+    .nav-item.open .nav-arrow { transform: rotate(90deg); }
+    .app-sidebar:not(.expanded):not(.pinned) .nav-arrow { display: none; }
+
+    /* 子菜单 */
+    .submenu {
+      display: none;
+      background: rgba(0,0,0,0.15);
+    }
+    .nav-item.open + .submenu { display: block; }
+    .submenu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 44px;
+      padding: 0 16px 0 46px;
+      font-size: 16px;
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .submenu-item:hover { background: rgba(14,132,121,0.3); color: #fff; }
+    .submenu-item.active { background: #0E8479; color: #fff; font-weight: 500; }
+    .app-sidebar:not(.expanded):not(.pinned) .submenu { display: none !important; }
+
+    /* Tooltip — 折叠时悬停显示 */
+    .nav-tooltip {
+      position: fixed;
+      background: #0E8479;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 500;
+      padding: 8px 14px;
+      border-radius: 6px;
+      pointer-events: none;
+      z-index: 9999;
+      white-space: nowrap;
+      display: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .app-sidebar:not(.expanded):not(.pinned) .nav-item:hover .nav-tooltip { display: block; }
+
+    /* 子菜单浮层面板 — 折叠时悬停有子菜单的项 */
+    .submenu-flyout {
+      position: fixed;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      border: 1px solid var(--border);
+      min-width: 180px;
+      z-index: 9998;
+      display: none;
+      padding: 8px 0;
+      left: 60px;
+    }
+    .submenu-flyout.visible { display: block; }
+    .submenu-flyout-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      font-size: 16px;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: background var(--transition-fast);
+    }
+    .submenu-flyout-item:hover { background: var(--primary-lightest); color: var(--primary); }
+    .submenu-flyout-item i { color: var(--text-sub); width: 20px; text-align: center; font-size: 16px; }
+    .submenu-flyout-title {
+      font-size: 15px; font-weight: 600; color: var(--text-dim);
+      padding: 6px 16px 8px;
+      border-bottom: 1px solid var(--border-light);
+      margin-bottom: 6px;
+    }
+
+    /* 固定按钮 */
+    .sidebar-pin {
+      height: auto;
+      padding: 6px 0;
+      display: flex;
+      align-items: center;
+      border-top: 1px solid rgba(255,255,255,0.12);
+      flex-shrink: 0;
+    }
+    .sidebar-pin-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      height: 52px;
+      padding: 0 16px;
+      border: none;
+      background: none;
+      color: rgba(255,255,255,0.8);
+      font-size: 16px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .sidebar-pin-btn i { font-size: 17px; }
+    .sidebar-pin-btn:hover { background: rgba(14,132,121,0.3); color: #fff; }
+    .sidebar-pin-btn.pinned {
+      background: rgba(14,132,121,0.3);
+      color: #fff;
+    }
+    .sidebar-pin-btn i.fa-thumbtack { transition: transform var(--transition-fast); }
+    .sidebar-pin-btn.pinned i.fa-thumbtack { transform: rotate(20deg); }
+    .sidebar-pin-label { flex: 1; text-align: left; }
+    .app-sidebar:not(.expanded):not(.pinned) .sidebar-pin-btn {
+      justify-content: center;
+    }
+    .app-sidebar:not(.expanded):not(.pinned) .sidebar-pin-label { display: none; }
+
+    /* ============================================================
+       内容区域 — Tab系统
+    ============================================================ */
+    .app-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg-page);
+    }
+    /* Tab 栏 */
+    .tab-bar {
+      height: 40px;
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: stretch;
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-shrink: 0;
+      padding: 0 8px;
+    }
+    .tab-bar::-webkit-scrollbar { height: 3px; }
+    .tab-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 14px;
+      font-size: 13px;
+      color: var(--text-sub);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      transition: all var(--transition-fast);
+      position: relative;
+    }
+    .tab-item:hover { color: var(--primary); background: var(--primary-lightest); }
+    .tab-item.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      font-weight: 600;
+    }
+    .tab-item .tab-close {
+      font-size: 10px;
+      color: var(--text-dim);
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all var(--transition-fast);
+    }
+    .tab-item .tab-close:hover { background: var(--danger-light); color: var(--danger); }
+    .tab-item.active .tab-close:hover { background: var(--danger-light); color: var(--danger); }
+
+    /* 内容页 */
+    .tab-panel {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+    .tab-page {
+      display: none;
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      padding: 24px 28px;
+    }
+    .tab-page.active { display: block; }
+
+    /* ============================================================
+       首页内容样式（保持在 .tab-page 里）
+    ============================================================ */
+    .home-welcome { margin-bottom: 20px; }
+    .home-welcome h1 { font-size: 22px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+    .home-welcome p { font-size: 15px; color: var(--text-sub); }
+
+    /* 公告栏 */
+    .notice-bar {
+      display: flex; align-items: center; gap: 10px;
+      background: linear-gradient(90deg, var(--primary-lightest), #fff);
+      border: 1px solid var(--primary-lighter);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      font-size: 15px; color: var(--primary-dark);
+    }
+    .notice-bar i { color: var(--primary); flex-shrink: 0; }
+    .notice-bar-text { flex: 1; }
+    .notice-bar-more { font-size: 16px; color: var(--primary); font-weight: 600; cursor: pointer; white-space: nowrap; }
+
+    /* 小标题 */
+    .section-title {
+      font-size: 16px; font-weight: 600; color: var(--text-main);
+      margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+    }
+    .section-title i { color: var(--primary); }
+
+    /* 统计卡片 */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+      transition: all var(--transition);
+    }
+    .stat-card:hover { box-shadow: var(--shadow-card-hover); transform: translateY(-1px); }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .stat-card.primary::before { background: var(--primary); }
+    .stat-card.success::before { background: var(--success); }
+    .stat-card.warning::before { background: var(--warning); }
+    .stat-card.danger::before  { background: var(--danger); }
+    .stat-card-icon {
+      position: absolute; right: 12px; top: 12px;
+      width: 36px; height: 36px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .stat-card-icon.primary { background: var(--primary-lighter); color: var(--primary); }
+    .stat-card-icon.success { background: var(--success-light); color: var(--success); }
+    .stat-card-icon.warning { background: var(--warning-light); color: var(--warning); }
+    .stat-card-icon.danger  { background: var(--danger-light); color: var(--danger); }
+    .stat-card-label { font-size: 14px; color: var(--text-sub); margin-bottom: 6px; }
+    .stat-card-value {
+      font-family: var(--font-mono); font-size: 28px; font-weight: 700;
+      color: var(--text-main); line-height: 1;
+    }
+    .stat-card-unit { font-size: 14px; color: var(--text-sub); margin-left: 2px; }
+    .stat-card-trend { font-size: 13px; color: var(--text-sub); margin-top: 5px; }
+    .stat-card-trend .up   { color: var(--danger); }
+    .stat-card-trend .down { color: var(--success); }
+
+    /* 快捷入口 */
+    .quick-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .quick-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      cursor: pointer; text-align: center;
+      transition: all var(--transition);
+    }
+    .quick-card:hover {
+      border-color: var(--primary-light);
+      box-shadow: var(--shadow-card-hover);
+      transform: translateY(-2px);
+    }
+    .quick-card-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; font-size: 22px;
+    }
+    .quick-card-label { font-size: 14px; font-weight: 600; color: var(--text-main); }
+    .quick-card-desc { font-size: 12px; color: var(--text-sub); }
+
+    /* 待办+预警 双栏 */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .dash-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .dash-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .dash-card-header-left { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; color: var(--text-main); }
+    .dash-card-header-left i { color: var(--primary); }
+    .dash-card-header-right { font-size: 14px; color: var(--text-sub); }
+
+    .todo-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer; transition: background var(--transition-fast);
+    }
+    .todo-item:last-child { border-bottom: none; }
+    .todo-item:hover { background: var(--primary-lightest); }
+    .todo-item-content { flex: 1; min-width: 0; }
+    .todo-item-title { font-size: 15px; color: var(--text-main); margin-bottom: 2px; }
+    .todo-item-meta { font-size: 13px; color: var(--text-sub); }
+    .todo-item-btn {
+      flex-shrink: 0; padding: 4px 12px;
+      border-radius: 5px; border: 1px solid var(--primary);
+      background: none; color: var(--primary);
+      font-size: 14px; font-weight: 600;
+      transition: all var(--transition-fast);
+    }
+    .todo-item-btn:hover { background: var(--primary); color: #fff; }
+
+    .alert-item {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-light);
+      cursor: pointer; transition: background var(--transition-fast);
+    }
+    .alert-item:last-child { border-bottom: none; }
+    .alert-item:hover { background: #fff8f8; }
+    .alert-item-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+    .alert-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 1px 7px; border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+    }
+    .alert-badge.warn  { background: var(--warning-light); color: var(--warning); }
+    .alert-badge.danger { background: var(--danger-light); color: var(--danger); }
+    .alert-badge.info  { background: var(--info-light); color: var(--info); }
+    .alert-item-time  { font-size: 13px; color: var(--text-dim); }
+    .alert-item-desc  { font-size: 14px; color: var(--text-sub); margin-bottom: 2px; }
+    .alert-item-link  { font-size: 14px; color: var(--primary); cursor: pointer; }
+    .alert-item-link:hover { text-decoration: underline; }
+
+    .dash-pager {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px;
+      border-top: 1px solid var(--border-light);
+      font-size: 14px; color: var(--text-sub);
+    }
+    .dash-pager-btns { display: flex; gap: 4px; }
+    .dash-pager-btn {
+      padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);
+      background: none; font-size: 14px; color: var(--text-sub); cursor: pointer;
+    }
+    .dash-pager-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ============================================================
+       响应式
+    ============================================================ */
+    @media (max-width: 1100px) {
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+      .quick-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+      .quick-grid { grid-template-columns: repeat(2, 1fr); }
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ======================================================
+     顶栏
+====================================================== -->
+<header class="top-header">
+  <h1 class="header-title">调配应用</h1>
+  <div class="header-right">
+    <button class="header-btn" id="bellBtn" title="消息通知" onclick="openTab('home','工作台','fa-tachometer-alt',null)">
+      <i class="fas fa-bell"></i>
+      <span class="badge-dot"></span>
+    </button>
+    <div class="header-divider"></div>
+    <div class="header-user" id="userWidget" onclick="toggleUserMenu()">
+      <div class="header-user-avatar">周</div>
+      <span class="header-user-name">周经理</span>
+      <i class="fas fa-chevron-down" style="font-size: 12px;color:rgba(255,255,255,0.5)"></i>
+    </div>
+  </div>
+</header>
+
+<!-- 天气弹层 -->
+<div class="popup-panel" id="weatherPopup" style="display:none;">
+  <div class="popup-title">长沙 · 2026年4月26日</div>
+  <div class="popup-weather-main">
+    <i class="fas fa-cloud-sun" style="font-size: 34px;color:#f59e0b"></i>
+    <div style="margin-left:12px">
+      <div style="font-size: 30px;font-weight:700;color:var(--text-main)">18°C</div>
+      <div style="font-size: 14px;color:var(--text-sub)">多云 · 空气优 · 湿度65%</div>
+    </div>
+  </div>
+  <div class="popup-row"><span>西风</span><span>2级</span></div>
+  <div class="popup-row"><span>紫外线</span><span>弱</span></div>
+  <div class="popup-row"><span>体感</span><span>17°C</span></div>
+</div>
+
+<!-- 用户下拉 -->
+<div class="popup-panel" id="userMenuPopup" style="display:none;">
+  <div class="popup-menu-item logout"><i class="fas fa-sign-out-alt"></i> 退出系统</div>
+</div>
+
+<!-- ======================================================
+     主体区域
+====================================================== -->
+<div class="app-body">
+
+  <!-- 侧边栏 -->
+  <aside class="app-sidebar" id="appSidebar">
+
+    <!-- 搜索 -->
+    <div class="sidebar-search">
+      <div class="sidebar-search-icon-only" title="搜索菜单">
+        <i class="fas fa-search"></i>
+      </div>
+      <div class="sidebar-search-input-wrap">
+        <i class="fas fa-search sidebar-search-icon"></i>
+        <input type="text" class="sidebar-search-input" placeholder="搜索菜单..." id="menuSearch" oninput="filterMenu(this.value)" />
+      </div>
+    </div>
+
+    <!-- 导航 -->
+    <nav class="sidebar-nav" id="sidebarNav">
+
+      <!-- 分组：工作台 -->
+      <div class="nav-group-title" data-full="工作台" data-short="工">工作台</div>
+      <button class="nav-item active" data-label="工作台" data-page="home" onclick="openTab('home', '工作台', 'fa-th-large', this)">
+        <span class="nav-item-icon"><i class="fas fa-th-large"></i></span>
+        <span class="nav-label">工作台</span>
+        <div class="nav-tooltip">工作台</div>
+      </button>
+
+      <!-- 分组：储备管理 -->
+      <div class="nav-group-title" data-full="储备管理" data-short="储">储备管理</div>
+      <button class="nav-item has-submenu" data-label="库存水位" data-page="reserve-level" onclick="toggleSubmenu(this); openTab('reserve-level','库存水位监测','fa-chart-line',this)">
+        <span class="nav-item-icon"><i class="fas fa-chart-line"></i></span>
+        <span class="nav-label">库存水位监测</span>
+        <i class="fas fa-chevron-right nav-arrow"></i>
+        <div class="nav-tooltip">库存水位监测</div>
+      </button>
+      <div class="submenu">
+        <div class="submenu-item" onclick="event.stopPropagation(); openTab('reserve-level','库存水位监测','fa-chart-line')">库存水位监测</div>
+        <div class="submenu-item" onclick="event.stopPropagation(); openTab('reserve-quota','储备定额管理','fa-sliders-h')">储备定额管理</div>
+        <div class="submenu-item" onclick="event.stopPropagation(); openTab('reserve-restock','AI补库建议','fa-robot')">AI 补库建议</div>
+      </div>
+      <!-- 子菜单浮出（折叠时hover显示） -->
+      <div class="submenu-flyout" id="flyout-reserve">
+        <div class="submenu-flyout-title">储备管理</div>
+        <div class="submenu-flyout-item" onclick="openTab('reserve-level','库存水位监测','fa-chart-line')"><i class="fas fa-chart-line"></i>库存水位监测</div>
+        <div class="submenu-flyout-item" onclick="openTab('reserve-quota','储备定额管理','fa-sliders-h')"><i class="fas fa-sliders-h"></i>储备定额管理</div>
+        <div class="submenu-flyout-item" onclick="openTab('reserve-restock','AI补库建议','fa-robot')"><i class="fas fa-robot"></i>AI 补库建议</div>
+      </div>
+
+      <button class="nav-item has-submenu" data-label="储备定额" data-page="reserve-quota" onclick="toggleSubmenu(this)">
+        <span class="nav-item-icon"><i class="fas fa-sliders-h"></i></span>
+        <span class="nav-label">储备定额管理</span>
+        <i class="fas fa-chevron-right nav-arrow"></i>
+        <div class="nav-tooltip">储备定额管理</div>
+      </button>
+      <div class="submenu">
+        <div class="submenu-item" onclick="event.stopPropagation(); openTab('reserve-quota','储备定额管理','fa-sliders-h')">储备定额管理</div>
+      </div>
+      <div class="submenu-flyout" id="flyout-reserve2">
+        <div class="submenu-flyout-title">储备管理</div>
+        <div class="submenu-flyout-item" onclick="openTab('reserve-level','库存水位监测','fa-chart-line')"><i class="fas fa-chart-line"></i>库存水位监测</div>
+        <div class="submenu-flyout-item" onclick="openTab('reserve-quota','储备定额管理','fa-sliders-h')"><i class="fas fa-sliders-h"></i>储备定额管理</div>
+        <div class="submenu-flyout-item" onclick="openTab('reserve-restock','AI补库建议','fa-robot')"><i class="fas fa-robot"></i>AI 补库建议</div>
+      </div>
+
+      <button class="nav-item has-submenu" data-label="AI补库" data-page="reserve-restock" onclick="toggleSubmenu(this)">
+        <span class="nav-item-icon"><i class="fas fa-robot"></i></span>
+        <span class="nav-label">AI 补库建议</span>
+        <span class="nav-badge">7</span>
+        <i class="fas fa-chevron-right nav-arrow"></i>
+        <div class="nav-tooltip">AI 补库建议 <span style="background:var(--danger);padding:0 4px;border-radius:4px;font-size: 12px;margin-left:4px">7</span></div>
+      </button>
+      <div class="submenu">
+        <div class="submenu-item" onclick="event.stopPropagation(); openTab('reserve-restock','AI补库建议','fa-robot')">AI 补库建议</div>
+      </div>
+      <div class="submenu-flyout" id="flyout-reserve3">
+        <div class="submenu-flyout-title">储备管理</div>
+        <div class="submenu-flyout-item" onclick="openTab('reserve-level','库存水位监测','fa-chart-line')"><i class="fas fa-chart-line"></i>库存水位监测</div>
+        <div class="submenu-flyout-item" onclick="openTab('reserve-quota','储备定额管理','fa-sliders-h')"><i class="fas fa-sliders-h"></i>储备定额管理</div>
+        <div class="submenu-flyout-item" onclick="openTab('reserve-restock','AI补库建议','fa-robot')"><i class="fas fa-robot"></i>AI 补库建议</div>
+      </div>
+
+      <!-- 分组：协议库存 -->
+      <div class="nav-group-title" data-full="协议库存" data-short="协">协议库存</div>
+      <button class="nav-item" data-label="智能匹配" data-page="protocol-match" onclick="openTab('protocol-match','智能匹配','fa-magic',this)">
+        <span class="nav-item-icon"><i class="fas fa-magic"></i></span>
+        <span class="nav-label">智能匹配</span>
+        <div class="nav-tooltip">智能匹配</div>
+      </button>
+      <button class="nav-item" data-label="补库计划" data-page="protocol-plan" onclick="openTab('protocol-plan','补库计划','fa-file-alt',this)">
+        <span class="nav-item-icon"><i class="fas fa-file-alt"></i></span>
+        <span class="nav-label">补库计划</span>
+        <span class="nav-badge warn">3</span>
+        <div class="nav-tooltip">补库计划 <span style="background:rgba(255,255,255,0.25);padding:0 4px;border-radius:4px;font-size: 12px;margin-left:4px">3</span></div>
+      </button>
+      <button class="nav-item" data-label="执行跟踪" data-page="protocol-track" onclick="openTab('protocol-track','执行跟踪','fa-tasks',this)">
+        <span class="nav-item-icon"><i class="fas fa-tasks"></i></span>
+        <span class="nav-label">执行跟踪</span>
+        <div class="nav-tooltip">执行跟踪</div>
+      </button>
+      <button class="nav-item" data-label="策略配置" data-page="protocol-config" onclick="openTab('protocol-config','策略配置','fa-cogs',this)">
+        <span class="nav-item-icon"><i class="fas fa-cogs"></i></span>
+        <span class="nav-label">策略配置</span>
+        <div class="nav-tooltip">策略配置</div>
+      </button>
+
+      <!-- 分组：领用调配 -->
+      <div class="nav-group-title" data-full="领用调配" data-short="领">领用调配</div>
+      <button class="nav-item" data-label="领用匹配" data-page="dispatch-match" onclick="openTab('dispatch-match','领用匹配','fa-exchange-alt',this)">
+        <span class="nav-item-icon"><i class="fas fa-exchange-alt"></i></span>
+        <span class="nav-label">领用匹配</span>
+        <div class="nav-tooltip">领用匹配</div>
+      </button>
+      <button class="nav-item" data-label="调配优化" data-page="dispatch-opt" onclick="openTab('dispatch-opt','调配优化','fa-route',this)">
+        <span class="nav-item-icon"><i class="fas fa-route"></i></span>
+        <span class="nav-label">调配优化</span>
+        <div class="nav-tooltip">调配优化</div>
+      </button>
+      <button class="nav-item" data-label="调令管理" data-page="dispatch-order" onclick="openTab('dispatch-order','调令管理','fa-clipboard-list',this)">
+        <span class="nav-item-icon"><i class="fas fa-clipboard-list"></i></span>
+        <span class="nav-label">调令管理</span>
+        <span class="nav-badge">12</span>
+        <div class="nav-tooltip">调令管理 <span style="background:var(--danger);padding:0 4px;border-radius:4px;font-size: 12px;margin-left:4px">12</span></div>
+      </button>
+      <button class="nav-item" data-label="异常告警" data-page="dispatch-alert" onclick="openTab('dispatch-alert','异常告警','fa-exclamation-triangle',this)">
+        <span class="nav-item-icon"><i class="fas fa-exclamation-triangle"></i></span>
+        <span class="nav-label">异常告警</span>
+        <div class="nav-tooltip">异常告警</div>
+      </button>
+
+      <!-- 分组：预约管理 -->
+      <div class="nav-group-title" data-full="预约管理" data-short="预">预约管理</div>
+      <button class="nav-item" data-label="中心站管理" data-page="appt-station" onclick="openTab('appt-station','中心站管理','fa-building',this)">
+        <span class="nav-item-icon"><i class="fas fa-building"></i></span>
+        <span class="nav-label">中心站管理</span>
+        <div class="nav-tooltip">中心站管理</div>
+      </button>
+      <button class="nav-item" data-label="作业面管理" data-page="appt-area" onclick="openTab('appt-area','作业面管理','fa-th-large',this)">
+        <span class="nav-item-icon"><i class="fas fa-th-large"></i></span>
+        <span class="nav-label">作业面管理</span>
+        <div class="nav-tooltip">作业面管理</div>
+      </button>
+      <button class="nav-item" data-label="预约类型管理" data-page="appt-type" onclick="openTab('appt-type','预约类型管理','fa-tags',this)">
+        <span class="nav-item-icon"><i class="fas fa-tags"></i></span>
+        <span class="nav-label">预约类型管理</span>
+        <div class="nav-tooltip">预约类型管理</div>
+      </button>
+      <button class="nav-item" data-label="放号管理" data-page="appt-slot" onclick="openTab('appt-slot','放号管理','fa-calendar-plus',this)">
+        <span class="nav-item-icon"><i class="fas fa-calendar-plus"></i></span>
+        <span class="nav-label">放号管理</span>
+        <div class="nav-tooltip">放号管理</div>
+      </button>
+      <button class="nav-item" data-label="号段审核" data-page="appt-slot-review" onclick="openTab('appt-slot-review','号段审核','fa-check-double',this)">
+        <span class="nav-item-icon"><i class="fas fa-check-double"></i></span>
+        <span class="nav-label">号段审核</span>
+        <div class="nav-tooltip">号段审核</div>
+      </button>
+      <button class="nav-item" data-label="预约办理" data-page="appt-booking" onclick="openTab('appt-booking','预约办理','fa-calendar-check',this)">
+        <span class="nav-item-icon"><i class="fas fa-calendar-check"></i></span>
+        <span class="nav-label">预约办理</span>
+        <div class="nav-tooltip">预约办理</div>
+      </button>
+      <button class="nav-item" data-label="预约审核" data-page="appt-review" onclick="openTab('appt-review','预约审核','fa-clipboard-check',this)">
+        <span class="nav-item-icon"><i class="fas fa-clipboard-check"></i></span>
+        <span class="nav-label">预约审核</span>
+        <div class="nav-tooltip">预约审核</div>
+      </button>
+      <button class="nav-item" data-label="临时预约" data-page="appt-temp" onclick="openTab('appt-temp','临时预约','fa-bolt',this)">
+        <span class="nav-item-icon"><i class="fas fa-bolt"></i></span>
+        <span class="nav-label">临时预约</span>
+        <div class="nav-tooltip">临时预约</div>
+      </button>
+      <button class="nav-item" data-label="预约统计" data-page="appt-stats" onclick="openTab('appt-stats','预约统计','fa-chart-bar',this)">
+        <span class="nav-item-icon"><i class="fas fa-chart-bar"></i></span>
+        <span class="nav-label">预约统计</span>
+        <div class="nav-tooltip">预约统计</div>
+      </button>
+      <button class="nav-item" data-label="取消预约管理" data-page="appt-cancel-config" onclick="openTab('appt-cancel-config','取消预约管理','fa-ban',this)">
+        <span class="nav-item-icon"><i class="fas fa-ban"></i></span>
+        <span class="nav-label">取消预约管理</span>
+        <div class="nav-tooltip">取消预约管理</div>
+      </button>
+
+      <!-- 分组：可视化大屏 -->
+      <div class="nav-group-title" data-full="可视化大屏" data-short="屏">可视化大屏</div>
+      <button class="nav-item" data-label="检储配一张图" data-page="dashboard" onclick="openTab('dashboard','检储配一张图','fa-layer-group',this)">
+        <span class="nav-item-icon"><i class="fas fa-layer-group"></i></span>
+        <span class="nav-label">检储配一张图</span>
+        <div class="nav-tooltip">检储配一张图</div>
+      </button>
+
+    </nav>
+
+    <!-- 固定按钮 -->
+    <div class="sidebar-pin">
+      <button class="sidebar-pin-btn" id="pinBtn" onclick="togglePin()" title="固定菜单">
+        <i class="fas fa-thumbtack"></i>
+        <span class="sidebar-pin-label">固定菜单</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- 内容区 -->
+  <main class="app-content">
+
+    <!-- Tab 栏 -->
+    <div class="tab-bar" id="tabBar">
+      <div class="tab-item active" data-tab="home" onclick="switchTab('home')">
+        <i class="fas fa-th-large"></i>
+        <span>工作台</span>
+        <span class="tab-close" onclick="closeTab(event,'home')"><i class="fas fa-times"></i></span>
+      </div>
+    </div>
+
+    <!-- Tab 内容 -->
+    <div class="tab-panel" id="tabPanel">
+
+      <!-- 工作台 Tab -->
+      <div class="tab-page active" id="tab-home">
+        <!-- 统计 -->
+        <p class="section-title"><i class="fas fa-chart-bar"></i> 今日数据概览</p>
+        <div class="stat-grid">
+          <div class="stat-card primary">
+            <div class="stat-card-icon primary"><i class="fas fa-boxes"></i></div>
+            <div class="stat-card-label">监控物资品类</div>
+            <div class="stat-card-value">2,847<span class="stat-card-unit">种</span></div>
+            <div class="stat-card-trend"><span class="up">+12</span> 新增品类</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-card-icon success"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-card-label">高水位品类</div>
+            <div class="stat-card-value">2,104<span class="stat-card-unit">种</span></div>
+            <div class="stat-card-trend">占比 <span class="down">73.9%</span> ↓</div>
+          </div>
+          <div class="stat-card warning">
+            <div class="stat-card-icon warning"><i class="fas fa-exclamation-circle"></i></div>
+            <div class="stat-card-label">中水位预警</div>
+            <div class="stat-card-value">543<span class="stat-card-unit">种</span></div>
+            <div class="stat-card-trend">较昨日 <span class="up">+28</span> ↑</div>
+          </div>
+          <div class="stat-card danger">
+            <div class="stat-card-icon danger"><i class="fas fa-fire"></i></div>
+            <div class="stat-card-label">低水位紧急</div>
+            <div class="stat-card-value">200<span class="stat-card-unit">种</span></div>
+            <div class="stat-card-trend">较昨日 <span class="up">+7</span> ↑</div>
+          </div>
+        </div>
+
+        <!-- 快捷入口 -->
+        <p class="section-title"><i class="fas fa-bolt"></i> 快捷入口</p>
+        <div class="quick-grid">
+          <div class="quick-card" onclick="openTab('reserve-level','库存水位监测','fa-chart-line')">
+            <div class="quick-card-icon" style="background:var(--primary-lighter);color:var(--primary)"><i class="fas fa-chart-line"></i></div>
+            <div class="quick-card-label">储备管理</div>
+            <div class="quick-card-desc">水位监控·定额管理·补库建议</div>
+          </div>
+          <div class="quick-card" onclick="openTab('protocol-match','协议库存','fa-handshake')">
+            <div class="quick-card-icon" style="background:var(--success-light);color:var(--success)"><i class="fas fa-handshake"></i></div>
+            <div class="quick-card-label">协议库存</div>
+            <div class="quick-card-desc">智能匹配·补库计划·执行跟踪</div>
+          </div>
+          <div class="quick-card" onclick="openTab('dispatch-match','领用调配','fa-route')">
+            <div class="quick-card-icon" style="background:var(--warning-light);color:var(--warning)"><i class="fas fa-route"></i></div>
+            <div class="quick-card-label">领用调配</div>
+            <div class="quick-card-desc">领用匹配·调配优化·调令管理</div>
+          </div>
+          <div class="quick-card" onclick="openTab('dispatch-order','调令管理','fa-clipboard-list')">
+            <div class="quick-card-icon" style="background:var(--danger-light);color:var(--danger)"><i class="fas fa-clipboard-list"></i></div>
+            <div class="quick-card-label">调令管理</div>
+            <div class="quick-card-desc">调令查询·异常告警</div>
+          </div>
+          <div class="quick-card" onclick="openTab('dashboard','检储配一张图','fa-layer-group')">
+            <div class="quick-card-icon" style="background:var(--info-light);color:var(--info)"><i class="fas fa-layer-group"></i></div>
+            <div class="quick-card-label">检储配一张图</div>
+            <div class="quick-card-desc">统计分析·库存分布</div>
+          </div>
+        </div>
+
+        <!-- 待办+预警 -->
+        <div class="dashboard-grid">
+          <div class="dash-card">
+            <div class="dash-card-header">
+              <div class="dash-card-header-left"><i class="fas fa-clipboard-check"></i> 待办列表</div>
+              <span class="dash-card-header-right">今日待办：3 项</span>
+            </div>
+            <!-- 来源1：01智能储备 — 立即补库计划 -->
+            <div class="todo-item" onclick="openTab('reserve-level','库存水位监测','fa-chart-line',null,'listArea')">
+              <div class="todo-item-content">
+                <div class="todo-item-title"><span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;background:#ffeaea;color:#ef5350;margin-right:6px;">01智能储备</span>长沙 · 10kV交联聚乙烯绝缘电缆 库存告急</div>
+                <div class="todo-item-meta">水位 18% · 需补库 230 km · 优先：紧急</div>
+              </div>
+              <button class="todo-item-btn">办理</button>
+            </div>
+            <!-- 来源2：02协议匹配 — 未上传ERP -->
+            <div class="todo-item" onclick="openTab('protocol-match','智能匹配','fa-magic',null,'listArea')">
+              <div class="todo-item-content">
+                <div class="todo-item-title"><span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;background:#fff8e1;color:#f59e0b;margin-right:6px;">02协议匹配</span>株洲 · 柱上变压器 S11-400/10 待推送ERP</div>
+                <div class="todo-item-meta">协议号：PF-20260505-012 · 供应商：特变电工衡阳 · 已审核待推送</div>
+              </div>
+              <button class="todo-item-btn">办理</button>
+            </div>
+            <!-- 来源3：03领用调配 — 部分匹配 -->
+            <div class="todo-item" onclick="openTab('dispatch-match','领用匹配','fa-exchange-alt',null,'listArea')">
+              <div class="todo-item-content">
+                <div class="todo-item-title"><span style="display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;background:#e8f5e9;color:#4caf50;margin-right:6px;">03领用调配</span>岳阳 · 配电箱 JXF-2000 部分匹配</div>
+                <div class="todo-item-meta">需求 30 · 已匹配 18 · 缺口 12 · 推荐：湘潭区域库</div>
+              </div>
+              <button class="todo-item-btn">办理</button>
+            </div>
+            <div class="dash-pager">
+              <span>共 3 条</span>
+              <div class="dash-pager-btns">
+                <button class="dash-pager-btn">上一页</button>
+                <button class="dash-pager-btn">1 / 1</button>
+                <button class="dash-pager-btn">下一页</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="dash-card">
+            <div class="dash-card-header">
+              <div class="dash-card-header-left"><i class="fas fa-bell"></i> 预警信息</div>
+            </div>
+            <!-- 来源1：01智能储备 — 低水位紧急 -->
+            <div class="alert-item" style="cursor:default;">
+              <div class="alert-item-header">
+                <span class="alert-badge danger"><i class="fas fa-fire-alt"></i> 库存告急</span>
+                <span class="alert-item-time">01智能储备</span>
+              </div>
+              <div class="alert-item-desc">2026年5月7日统计：低水位紧急物资共 200 种，较昨日新增 7 种，涉及长沙、株洲、湘潭等 8 个地市仓库，建议立即核查并制定补库计划</div>
+            </div>
+            <!-- 来源2：02协议匹配 — 待审核 -->
+            <div class="alert-item" style="cursor:default;">
+              <div class="alert-item-header">
+                <span class="alert-badge warn"><i class="fas fa-exclamation-triangle"></i> 待审核</span>
+                <span class="alert-item-time">02协议匹配</span>
+              </div>
+              <div class="alert-item-desc">2026年5月7日，02协议匹配模块共有 6 条匹配结果等待人工审核，请及时完成审核后推送 ERP 执行</div>
+            </div>
+            <!-- 来源3：02协议匹配 — 即将到期 -->
+            <div class="alert-item" style="cursor:default;">
+              <div class="alert-item-header">
+                <span class="alert-badge warn" style="background:var(--warning-lighter);color:#d97706;"><i class="fas fa-clock"></i> 即将到期</span>
+                <span class="alert-item-time">02协议匹配</span>
+              </div>
+              <div class="alert-item-desc">2026年5月，02协议匹配模块有 3 份协议执行进度即将到期（到期日分别为5月8日、5月15日、5月20日），请尽快处理以免影响供应</div>
+            </div>
+            <!-- 来源4：03领用调配 — 应急待处理 -->
+            <div class="alert-item" style="cursor:default;">
+              <div class="alert-item-header">
+                <span class="alert-badge danger"><i class="fas fa-bolt"></i> 应急待处理</span>
+                <span class="alert-item-time">03领用调配</span>
+              </div>
+              <div class="alert-item-desc">2026年5月7日，03领用调配模块应急类型共有 8 条待处理任务，其中包含 3 条超期预警，建议优先处理应急调配需求</div>
+            </div>
+            <div class="dash-pager">
+              <span>共 4 条</span>
+              <div class="dash-pager-btns">
+                <button class="dash-pager-btn">上一页</button>
+                <button class="dash-pager-btn">1 / 1</button>
+                <button class="dash-pager-btn">下一页</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /tab-home -->
+
+      <!-- 子页面 Tab（动态生成占位内容） -->
+      <div class="tab-page" id="tab-iframe-container"></div>
+
+    </div><!-- /tabPanel -->
+  </main>
+</div><!-- /app-body -->
+
+
+<!-- 大屏入口FAB已删除 -->
+
+<!-- 弹层面板 -->
+<style>
+  .popup-panel {
+    position: fixed; top: 64px; right: 16px;
+    background: #fff; border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.16);
+    z-index: 9999; min-width: 160px;
+    padding: 6px 0;
+    overflow: hidden;
+  }
+  /* 天气弹层内部 */
+  .popup-title { font-size: 15px; font-weight: 600; color: var(--text-main); padding: 2px 14px 10px; border-bottom: 1px solid var(--border-light); margin-bottom: 8px; }
+  .popup-weather-main { display: flex; align-items: center; padding: 4px 14px 12px; }
+  .popup-row { display: flex; justify-content: space-between; padding: 5px 14px; font-size: 14px; color: var(--text-sub); }
+  .popup-row:not(:last-child) { border-bottom: 1px solid var(--border-light); }
+  /* 用户下拉菜单 */
+  .popup-user-info { display: flex; align-items: center; gap: 10px; padding: 2px 14px 12px; }
+  .popup-user-avatar { width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #fff; }
+  .popup-divider { height: 1px; background: #f3f4f6; margin: 4px 0; }
+  .popup-menu-item { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 15px; color: var(--text-main); cursor: pointer; transition: background 150ms; }
+  .popup-menu-item:hover { background: #f3f4f6; }
+  .popup-menu-item i { width: 16px; color: var(--text-sub); }
+  .popup-menu-item.logout { color: #dc2626; }
+  .popup-menu-item.logout i { color: #dc2626; }
+  .popup-menu-item.logout:hover { background: #fef2f2; }
+</style>
+
+<!-- 动态Tab页面内容（iframe容器） -->
+<script>
+  // 页面配置：pageId → { title, icon, src }
+  const PAGE_CONFIG = {
+    'reserve-level':    { title: '库存水位监测',   icon: 'fa-chart-line',       src: '01_intelligent_reserve.html' },
+    'reserve-quota':     { title: '储备定额管理',   icon: 'fa-sliders-h',         src: null },
+    'reserve-restock':   { title: 'AI 补库建议',    icon: 'fa-robot',             src: null },
+    'protocol-match':    { title: '智能匹配',       icon: 'fa-magic',             src: '02_protocol_matching.html' },
+    'protocol-plan':     { title: '补库计划',       icon: 'fa-file-alt',          src: null },
+    'protocol-track':    { title: '执行跟踪',       icon: 'fa-tasks',             src: null },
+    'protocol-config':   { title: '策略配置',       icon: 'fa-cogs',              src: null },
+    'dispatch-match':    { title: '领用匹配',       icon: 'fa-exchange-alt',       src: '03_dispatch_planning.html' },
+    'dispatch-opt':      { title: '调配优化',       icon: 'fa-route',             src: null },
+    'dispatch-order':    { title: '调令管理',       icon: 'fa-clipboard-list',    src: null },
+    'dispatch-alert':    { title: '异常告警',       icon: 'fa-exclamation-triangle', src: null },
+    'dashboard':         { title: '检储配一张图',   icon: 'fa-layer-group',       src: '04_dashboard_fullscreen.html' },
+    'appt-station':     { title: '中心站管理',     icon: 'fa-building',          src: '05_appt_station.html' },
+    'appt-area':        { title: '作业面管理',     icon: 'fa-th-large',          src: '06_appt_area.html' },
+    'appt-type':        { title: '预约类型管理',   icon: 'fa-tags',              src: '12_appt_type.html' },
+    'appt-slot':        { title: '放号管理',       icon: 'fa-calendar-plus',     src: '07_appt_slot.html' },
+    'appt-slot-review': { title: '号段审核',       icon: 'fa-check-double',      src: '13_appt_slot_review.html' },
+    'appt-booking':     { title: '预约办理',       icon: 'fa-calendar-check',    src: '08_appt_booking.html' },
+    'appt-review':      { title: '预约审核',       icon: 'fa-clipboard-check',   src: '09_appt_review.html' },
+    'appt-temp':        { title: '临时预约',       icon: 'fa-bolt',              src: '10_appt_temp.html' },
+    'appt-stats':       { title: '预约统计',       icon: 'fa-chart-bar',         src: '11_appt_stats.html' },
+    'appt-cancel-config': { title: '取消预约管理', icon: 'fa-ban',               src: '14_appt_cancel_config.html' },
+  };
+  const OPENED_TABS = new Set(['home']);
+
+  // ─── Tab ───────────────────────────────────────────────
+  function openTab(pageId, title, iconClass, navBtn, scrollTarget) {
+    if (!OPENED_TABS.has(pageId)) {
+      OPENED_TABS.add(pageId);
+      // 新增Tab按钮
+      const tabBar = document.getElementById('tabBar');
+      const tab = document.createElement('div');
+      tab.className = 'tab-item';
+      tab.dataset.tab = pageId;
+      tab.innerHTML = `<i class="fas ${iconClass}"></i><span>${title}</span><span class="tab-close" onclick="closeTab(event,'${pageId}')"><i class="fas fa-times"></i></span>`;
+      tab.onclick = () => switchTab(pageId);
+      tabBar.appendChild(tab);
+    }
+    switchTab(pageId, scrollTarget);
+    // 高亮侧边栏对应项
+    highlightSidebar(pageId);
+  }
+
+  function switchTab(pageId, scrollTarget) {
+    // Tab按钮状态
+    document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+    const tabBtn = document.querySelector(`.tab-item[data-tab="${pageId}"]`);
+    if (tabBtn) tabBtn.classList.add('active');
+
+    // 内容切换
+    document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+
+    if (pageId === 'home') {
+      document.getElementById('tab-home').classList.add('active');
+    } else {
+      const cfg = PAGE_CONFIG[pageId];
+      if (!cfg) return;
+      const container = document.getElementById('tab-iframe-container');
+      container.classList.add('active');
+      // 懒加载iframe
+      if (!container.querySelector(`iframe[data-page="${pageId}"]`)) {
+        if (cfg.src) {
+          container.innerHTML = `<iframe data-page="${pageId}" src="${cfg.src}" style="width:100%;height:100%;border:none;display:block"></iframe>`;
+          // iframe加载后滚动到目标区域（通过postMessage）
+          if (scrollTarget) {
+            const iframe = container.querySelector(`iframe[data-page="${pageId}"]`);
+            iframe.onload = function() {
+              setTimeout(function() {
+                iframe.contentWindow.postMessage({ type: 'scrollTo', targetId: scrollTarget }, '*');
+              }, 500);
+            };
+          }
+        } else {
+          container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:var(--text-dim)"><i class="fas ${cfg.icon}" style="font-size: 50px"></i><div style="font-size: 17px;font-weight:600;color:var(--text-sub)">${cfg.title}</div><div style="font-size: 14px">页面建设中...</div></div>`;
+        }
+      } else {
+        // 已有，直接显示
+        const existing = container.querySelector(`iframe[data-page="${pageId}"]`) || container.querySelector(`[data-page="${pageId}"]`);
+        if (existing) {
+          existing.style.display = 'block';
+          // iframe已加载，直接postMessage滚动
+          if (scrollTarget && existing.contentWindow) {
+            setTimeout(function() {
+              existing.contentWindow.postMessage({ type: 'scrollTo', targetId: scrollTarget }, '*');
+            }, 200);
+          }
+        }
+      }
+    }
+    highlightSidebar(pageId);
+  }
+
+  function closeTab(e, pageId) {
+    e.stopPropagation();
+    const tabs = Array.from(document.querySelectorAll('.tab-item'));
+    const idx = tabs.findIndex(t => t.dataset.tab === pageId);
+    const tabEl = tabs[idx];
+    tabEl.remove();
+    OPENED_TABS.delete(pageId);
+
+    // 清理iframe
+    const iframe = document.querySelector(`#tab-iframe-container iframe[data-page="${pageId}"]`);
+    if (iframe) iframe.remove();
+
+    // 激活相邻Tab
+    const remaining = Array.from(document.querySelectorAll('.tab-item'));
+    if (remaining.length > 0) {
+      const newIdx = Math.min(idx, remaining.length - 1);
+      switchTab(remaining[newIdx].dataset.tab);
+    } else {
+      // 最少保留一个
+      switchTab('home');
+    }
+  }
+
+  function highlightSidebar(pageId) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    const btn = document.querySelector(`.nav-item[data-page="${pageId}"]`);
+    if (btn) btn.classList.add('active');
+  }
+</script>
+
+<script src="index.js?v=1"></script>
+</body>
+</html>

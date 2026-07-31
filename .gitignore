@@ -1,0 +1,17 @@
+# Local/editor noise
+.DS_Store
+Thumbs.db
+*.log
+~$*
+
+# Dependency/build outputs
+node_modules/
+dist/
+build/
+.cache/
+.tmp/
+coverage/
+
+# Historical archive is kept on disk but not part of active implementation baseline.
+_archive/
+
