@@ -213,12 +213,12 @@ function renderUserSlots() {
     <section class="section">
       <div class="quick-grid">
         <button class="quick-card action-card" data-action="nav" data-view="booking-form">
-          <span class="quick-icon">□</span>
+          <span class="quick-icon">${quickIcon("calendarPlus")}</span>
           <strong>预约办理</strong>
           <small>选择下周号段并提交预约</small>
         </button>
         <button class="quick-card action-card alt" data-action="nav" data-view="my-bookings">
-          <span class="quick-icon">✓</span>
+          <span class="quick-icon">${quickIcon("statusList")}</span>
           <strong>预约状态查看及催办</strong>
           <small>查看审核、取消、完结与过号记录</small>
         </button>
@@ -691,6 +691,24 @@ function renderUserHero() {
       </div>
     </section>
   `;
+}
+
+function quickIcon(name) {
+  const icons = {
+    calendarPlus: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M7 3v3M17 3v3M4.5 9.5h15M6.5 5h11A2.5 2.5 0 0 1 20 7.5v10A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5v-10A2.5 2.5 0 0 1 6.5 5Z"/>
+        <path d="M12 12v5M9.5 14.5h5"/>
+      </svg>
+    `,
+    statusList: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M8 6.5h11M8 12h11M8 17.5h11"/>
+        <path d="m3.5 6.5 1.1 1.1 2-2.2M3.5 12l1.1 1.1 2-2.2M3.5 17.5l1.1 1.1 2-2.2"/>
+      </svg>
+    `
+  };
+  return icons[name] || "";
 }
 
 function renderRuleCards() {
