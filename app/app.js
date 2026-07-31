@@ -119,8 +119,8 @@ function render() {
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
-          <h1 class="brand-title">预约管理 MVP</h1>
-          <p class="brand-subtitle">需求基线执行版</p>
+          <h1 class="brand-title">仓库预约管理</h1>
+          <p class="brand-subtitle">需求 TAB 执行版</p>
         </div>
         <div class="mode-switch">
           ${modeButton("user", "用户前端")}
@@ -203,13 +203,36 @@ function renderView() {
 function renderUserSlots() {
   const restriction = api.userRestriction();
   const slots = api.listBookableSlots();
+  const user = api.currentUser();
+  const myBookings = api.listBookings().filter((booking) => booking.requesterUserId === user.id);
+  const pendingCount = myBookings.filter((booking) => booking.status === BookingStatus.SUBMITTED).length;
+  const activeCount = myBookings.filter((booking) => booking.status === BookingStatus.APPROVED || booking.status === BookingStatus.PENDING_COMPLETION).length;
   return `
+    ${renderUserHero()}
     ${restrictionNotice(restriction)}
+    <section class="section">
+      <div class="quick-grid">
+        <button class="quick-card action-card" data-action="nav" data-view="booking-form">
+          <span class="quick-icon">□</span>
+          <strong>预约办理</strong>
+          <small>选择下周号段并提交预约</small>
+        </button>
+        <button class="quick-card action-card alt" data-action="nav" data-view="my-bookings">
+          <span class="quick-icon">✓</span>
+          <strong>预约状态查看及催办</strong>
+          <small>查看审核、取消、完结与过号记录</small>
+        </button>
+        ${metric("本单位待审核预约", pendingCount, "条")}
+        ${metric("本单位已通过预约", activeCount, "条")}
+        ${metric("全部可预约号段", slots.length, "个")}
+      </div>
+    </section>
+    ${renderRuleCards()}
     <section class="section surface">
       <div class="section-header">
         <div>
           <h2>下周可预约号段</h2>
-          <p>普通预约只展示已通过审核且开放预约的下周号段。</p>
+          <p>来自需求 TAB：普通预约只展示已通过审核且开放预约的下周号段。</p>
         </div>
         <button class="btn btn-primary" data-action="nav" data-view="booking-form">新建预约</button>
       </div>
@@ -289,7 +312,9 @@ function renderBookingForm(source) {
 function renderMyBookings() {
   const user = api.currentUser();
   const bookings = api.listBookings().filter((booking) => booking.requesterUserId === user.id);
+  const records = api.operationRecords({ limit: 8 }).filter((record) => record.unitName === user.unitName);
   return `
+    ${renderRuleCards()}
     <section class="section surface">
       <div class="section-header">
         <div>
@@ -299,6 +324,17 @@ function renderMyBookings() {
       </div>
       <div class="section-body">
         ${bookings.length ? bookingCards(bookings, true) : empty("暂无预约记录")}
+      </div>
+    </section>
+    <section class="section surface">
+      <div class="section-header">
+        <div>
+          <h2>操作记录</h2>
+          <p>取消、过号等记录进入单位考核口径；这里展示当前单位最近操作。</p>
+        </div>
+      </div>
+      <div class="section-body table-wrap">
+        ${operationRecordTable(records)}
       </div>
     </section>
   `;
@@ -645,6 +681,41 @@ function renderStats() {
   `;
 }
 
+function renderUserHero() {
+  return `
+    <section class="hero-panel section">
+      <div>
+        <p class="hero-kicker">仓库承载预约</p>
+        <h2>预约前置管控</h2>
+        <p>按需求 TAB 管控下周号段、取消窗口、过号记录和临时预约。</p>
+      </div>
+    </section>
+  `;
+}
+
+function renderRuleCards() {
+  return `
+    <section class="section rule-grid">
+      <article class="rule-card">
+        <strong>本周预约下周</strong>
+        <span>普通预约入口只开放下周已审核通过号段，其他日期不进入可选清单。</span>
+      </article>
+      <article class="rule-card">
+        <strong>前一天可取消</strong>
+        <span>仅预约号段前一自然日可取消；取消会释放容量并累计单位/账号取消次数。</span>
+      </article>
+      <article class="rule-card">
+        <strong>过号进入考核</strong>
+        <span>仓库管理员标记过号后通知联系人，并累计过号次数，达到阈值后当月禁约。</span>
+      </article>
+      <article class="rule-card">
+        <strong>临时号段先审核</strong>
+        <span>仓库创建临时号段并说明原因，中心审核通过后用户才能办理临时预约。</span>
+      </article>
+    </section>
+  `;
+}
+
 function slotCards(slots, action) {
   if (!slots.length) return empty("暂无可预约号段");
   return `
@@ -749,6 +820,27 @@ function bookingTable(bookings, mode) {
   `;
 }
 
+function operationRecordTable(records) {
+  if (!records.length) return empty("暂无操作记录");
+  return `
+    <table>
+      <thead><tr><th>时间</th><th>单位</th><th>动作</th><th>结果</th><th>考核类型</th><th>原因</th></tr></thead>
+      <tbody>
+        ${records.map((record) => `
+          <tr>
+            <td>${formatTime(record.at)}</td>
+            <td>${escapeHtml(record.unitName)}<br>${escapeHtml(unitTypeLabel(record.unitType))}</td>
+            <td>${escapeHtml(record.action)}</td>
+            <td>${escapeHtml(record.result)}</td>
+            <td>${assessmentTag(record.assessmentType)}</td>
+            <td>${escapeHtml(record.reason || "-")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function bookingActions(booking, mode) {
   if (mode === "review") {
     return `
@@ -824,6 +916,17 @@ function metric(label, value, helper) {
       <div class="label">${helper || ""}</div>
     </div>
   `;
+}
+
+function assessmentTag(type) {
+  if (type === "cancel") return tag("取消", "warning");
+  if (type === "noShow") return tag("过号", "danger");
+  return tag("普通", "default");
+}
+
+function formatTime(value) {
+  if (!value) return "-";
+  return String(value).replace("T", " ").slice(0, 16);
 }
 
 function statusTag(status) {
@@ -923,4 +1026,3 @@ function escapeHtml(value) {
 function escapeAttr(value) {
   return escapeHtml(value);
 }
-

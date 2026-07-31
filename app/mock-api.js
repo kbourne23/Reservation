@@ -204,14 +204,29 @@ export function createInitialState() {
       }
     ],
     messages: [],
-    logs: []
+    logs: [],
+    operationRecords: [
+      {
+        id: "op-seed-1",
+        businessType: "booking",
+        businessId: "apt-20260731-001",
+        unitName: "衡阳电缆有限公司",
+        unitType: "supplier",
+        operator: "陈伟",
+        action: "提交预约",
+        result: "待仓库审核",
+        assessmentType: "normal",
+        reason: "提交供应商到货预约",
+        at: "2026-07-31T03:20:00.000Z"
+      }
+    ]
   };
 }
 
 export function loadState() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : createInitialState();
+    return stored ? normalizeState(JSON.parse(stored)) : createInitialState();
   } catch {
     return createInitialState();
   }
@@ -293,6 +308,16 @@ export function createApi(state, persist = () => {}) {
       const slot = findById(api.state.slots, slotId);
       replaceById(api.state.slots, slotId, transitionSlot(slot, "submit", actor, "提交中心管理员审核"));
       pushMessage(api.state, "centerAdmin", "号段待审核", `${slot.date} ${slot.start}-${slot.end} 已提交审核`);
+      recordOperation(api.state, {
+        businessType: "slot",
+        businessId: slot.id,
+        unitName: enrichSlot(api.state, slot).warehouseName,
+        unitType: "warehouse",
+        operator: actor,
+        action: "提交号段审核",
+        result: "待中心审核",
+        reason: "仓库管理员提交放号"
+      });
       persist(api.state);
     },
 
@@ -302,6 +327,16 @@ export function createApi(state, persist = () => {}) {
       next = transitionSlot(next, "publish", "system", "审核通过后开放预约");
       replaceById(api.state.slots, slotId, next);
       pushMessage(api.state, "warehouseAdmin", "号段审核通过", `${slot.date} ${slot.start}-${slot.end} 已开放预约`);
+      recordOperation(api.state, {
+        businessType: "slot",
+        businessId: slot.id,
+        unitName: enrichSlot(api.state, slot).warehouseName,
+        unitType: "warehouse",
+        operator: actor,
+        action: "号段审核通过",
+        result: "开放预约",
+        reason: "中心管理员审核通过"
+      });
       persist(api.state);
     },
 
@@ -309,6 +344,16 @@ export function createApi(state, persist = () => {}) {
       const slot = findById(api.state.slots, slotId);
       replaceById(api.state.slots, slotId, transitionSlot(slot, "reject", actor, reason || "中心管理员驳回"));
       pushMessage(api.state, "warehouseAdmin", "号段被驳回", reason || "请修改后重新提交");
+      recordOperation(api.state, {
+        businessType: "slot",
+        businessId: slot.id,
+        unitName: enrichSlot(api.state, slot).warehouseName,
+        unitType: "warehouse",
+        operator: actor,
+        action: "号段审核驳回",
+        result: "需修改重提",
+        reason: reason || "中心管理员驳回"
+      });
       persist(api.state);
     },
 
@@ -365,6 +410,16 @@ export function createApi(state, persist = () => {}) {
       slot.booked += 1;
       api.state.bookings.unshift(addHistory(booking, "submit", actorName || user.name, "提交预约申请"));
       pushMessage(api.state, "warehouseAdmin", "预约待审核", `${booking.companyName} 提交 ${displayType(api.state, booking.typeCode)} 预约`);
+      recordOperation(api.state, {
+        businessType: "booking",
+        businessId: booking.id,
+        unitName: booking.companyName,
+        unitType: booking.unitType,
+        operator: actorName || user.name,
+        action: "提交预约",
+        result: "待仓库审核",
+        reason: `${displayType(api.state, booking.typeCode)} ${booking.date} ${booking.start}-${booking.end}`
+      });
       persist(api.state);
       return { ok: true, booking };
     },
@@ -379,6 +434,16 @@ export function createApi(state, persist = () => {}) {
       const booking = findById(api.state.bookings, bookingId);
       replaceById(api.state.bookings, bookingId, transitionBooking(booking, "approve", actor, "仓库管理员审核通过"));
       pushMessage(api.state, booking.requesterUserId, "预约审核通过", `${booking.date} ${booking.start}-${booking.end} 已通过`);
+      recordOperation(api.state, {
+        businessType: "booking",
+        businessId: booking.id,
+        unitName: booking.companyName,
+        unitType: booking.unitType,
+        operator: actor,
+        action: "预约审核通过",
+        result: "已通过",
+        reason: "仓库管理员审核通过"
+      });
       persist(api.state);
     },
 
@@ -387,6 +452,16 @@ export function createApi(state, persist = () => {}) {
       replaceById(api.state.bookings, bookingId, transitionBooking(booking, "reject", actor, reason || "预约信息不完整"));
       releaseSlot(api.state, booking.slotId);
       pushMessage(api.state, booking.requesterUserId, "预约被驳回", reason || "请修改后重新提交");
+      recordOperation(api.state, {
+        businessType: "booking",
+        businessId: booking.id,
+        unitName: booking.companyName,
+        unitType: booking.unitType,
+        operator: actor,
+        action: "预约审核驳回",
+        result: "已驳回",
+        reason: reason || "预约信息不完整"
+      });
       persist(api.state);
     },
 
@@ -398,6 +473,17 @@ export function createApi(state, persist = () => {}) {
       releaseSlot(api.state, booking.slotId);
       const user = findById(api.state.users, booking.requesterUserId);
       if (user) user.cancelCount = (user.cancelCount || 0) + 1;
+      recordOperation(api.state, {
+        businessType: "booking",
+        businessId: booking.id,
+        unitName: booking.companyName,
+        unitType: booking.unitType,
+        operator: actor,
+        action: "取消预约",
+        result: "已取消并累计取消次数",
+        assessmentType: "cancel",
+        reason: reason || "用户取消预约"
+      });
       persist(api.state);
       return { ok: true };
     },
@@ -413,6 +499,16 @@ export function createApi(state, persist = () => {}) {
     completeBooking(bookingId, actor = ACTOR) {
       const booking = ensurePendingCompletion(api.state, bookingId);
       replaceById(api.state.bookings, bookingId, transitionBooking(booking, "complete", actor, "仓库管理员标记完结"));
+      recordOperation(api.state, {
+        businessType: "booking",
+        businessId: booking.id,
+        unitName: booking.companyName,
+        unitType: booking.unitType,
+        operator: actor,
+        action: "预约完结",
+        result: "已完结",
+        reason: "仓库管理员确认履约完成"
+      });
       persist(api.state);
     },
 
@@ -422,6 +518,17 @@ export function createApi(state, persist = () => {}) {
       const user = findById(api.state.users, booking.requesterUserId);
       if (user) user.noShowCount = (user.noShowCount || 0) + 1;
       pushMessage(api.state, booking.requesterUserId, "预约过号", `${booking.date} ${booking.start}-${booking.end} 已记录过号`);
+      recordOperation(api.state, {
+        businessType: "booking",
+        businessId: booking.id,
+        unitName: booking.companyName,
+        unitType: booking.unitType,
+        operator: actor,
+        action: "过号处理",
+        result: "已过号并累计过号次数",
+        assessmentType: "noShow",
+        reason: reason || "预约过号"
+      });
       persist(api.state);
     },
 
@@ -430,6 +537,16 @@ export function createApi(state, persist = () => {}) {
       api.state.bookings.forEach((booking) => {
         if (booking.status === BookingStatus.PENDING_COMPLETION) {
           replaceById(api.state.bookings, booking.id, transitionBooking(booking, "autoComplete", "system", "每日00:00自动按工单完结"));
+          recordOperation(api.state, {
+            businessType: "booking",
+            businessId: booking.id,
+            unitName: booking.companyName,
+            unitType: booking.unitType,
+            operator: "system",
+            action: "自动完结",
+            result: "按工单完结",
+            reason: "每日00:00未处理自动完结"
+          });
           count += 1;
         }
       });
@@ -453,6 +570,13 @@ export function createApi(state, persist = () => {}) {
       user.noShowCount = 0;
       api.state.logs.unshift({ action: "resetCounts", actor: ACTOR, target: user.name, at: new Date().toISOString() });
       persist(api.state);
+    },
+
+    operationRecords(filter = {}) {
+      return api.state.operationRecords
+        .filter((record) => !filter.businessId || record.businessId === filter.businessId)
+        .filter((record) => !filter.assessmentType || record.assessmentType === filter.assessmentType)
+        .slice(0, filter.limit || 30);
     },
 
     stats() {
@@ -584,6 +708,35 @@ function pushMessage(state, receiver, title, content) {
   });
 }
 
+function recordOperation(state, input) {
+  state.operationRecords ||= [];
+  state.operationRecords.unshift({
+    id: `op-${Date.now()}-${state.operationRecords.length}`,
+    assessmentType: "normal",
+    at: new Date().toISOString(),
+    ...input
+  });
+}
+
+function normalizeState(state) {
+  const base = createInitialState();
+  return {
+    ...base,
+    ...state,
+    config: { ...base.config, ...(state.config || {}) },
+    users: state.users || base.users,
+    stations: state.stations || base.stations,
+    warehouses: state.warehouses || base.warehouses,
+    workFaces: state.workFaces || base.workFaces,
+    appointmentTypes: state.appointmentTypes || base.appointmentTypes,
+    slots: state.slots || base.slots,
+    bookings: state.bookings || base.bookings,
+    messages: state.messages || base.messages,
+    logs: state.logs || base.logs,
+    operationRecords: state.operationRecords || base.operationRecords
+  };
+}
+
 function addDays(dateText, days) {
   const date = new Date(`${dateText}T00:00:00`);
   date.setDate(date.getDate() + days);
@@ -599,4 +752,3 @@ function ensurePendingCompletion(state, bookingId) {
   }
   return booking;
 }
-
