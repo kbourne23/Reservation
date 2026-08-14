@@ -6,8 +6,8 @@ import {
   saveState,
   statusLabel,
   unitTypeLabel
-} from "./mock-api.js";
-import { BookingStatus, SlotStatus, audienceTypeForUnit, canCancelBooking } from "./state-machines.js";
+} from "./mock-api.js?v=20260814-calendar-v4";
+import { BookingStatus, SlotStatus, audienceTypeForUnit, canCancelBooking } from "./state-machines.js?v=20260814-calendar-v4";
 
 const root = document.querySelector("#root");
 let api = createApi(loadState(), saveState);
@@ -37,6 +37,7 @@ const adminNav = [
 window.addEventListener("hashchange", () => {
   ui = parseRoute();
   render();
+  window.scrollTo(0, 0);
 });
 
 document.addEventListener("click", (event) => {
@@ -49,6 +50,9 @@ document.addEventListener("click", (event) => {
   if (action === "nav") navigate(ui.mode, target.dataset.view);
   if (action === "book-slot") navigate("user", "booking-form", { slotId: target.dataset.slotId });
   if (action === "temp-book-slot") navigate("user", "booking-form", { slotId: target.dataset.slotId, temporary: "1" });
+  if (action === "select-calendar-day") selectCalendarDay(target);
+  if (action === "select-calendar-slot") selectCalendarSlot(target);
+  if (action === "filter-bookings") filterBookingCards(target);
   if (action === "reset-demo") resetDemo();
   if (action === "submit-slot") doAction(() => api.submitSlot(target.dataset.slotId, "张建国"), "号段已提交中心审核");
   if (action === "approve-slot") doAction(() => api.approveSlot(target.dataset.slotId, "李明辉"), "号段已通过并开放预约");
@@ -111,6 +115,10 @@ document.addEventListener("submit", (event) => {
   if (form.dataset.form === "adjustment") submitAdjustment(form);
   if (form.dataset.form === "config") submitConfig(form);
 });
+
+document.addEventListener("invalid", (event) => {
+  event.target.closest("details")?.setAttribute("open", "");
+}, true);
 
 render();
 
@@ -232,41 +240,31 @@ function renderView() {
 function renderUserSlots() {
   const restriction = api.userRestriction();
   const user = api.currentUser();
-  const slots = api.listBookableSlots({ audienceType: audienceTypeForUnit(user.unitType) });
+  const slots = api.listBookableSlots({ audienceType: audienceTypeForUnit(user.unitType), includeFull: true });
+  const openSlots = slots.filter((slot) => slot.remaining > 0);
   const myBookings = api.listBookings().filter((booking) => booking.requesterUserId === user.id);
   const pendingCount = myBookings.filter((booking) => booking.status === BookingStatus.SUBMITTED).length;
   const activeCount = myBookings.filter((booking) => [BookingStatus.APPROVED, BookingStatus.PENDING_COMPLETION, BookingStatus.MISSED_WINDOW, BookingStatus.ADJUSTMENT_PENDING, BookingStatus.RESCHEDULED].includes(booking.status)).length;
   return `
-    ${renderUserHero()}
-    ${restrictionNotice(restriction)}
-    <section class="section">
-      <div class="quick-grid">
-        <button class="quick-card action-card" data-action="nav" data-view="booking-form">
-          <span class="quick-icon">${quickIcon("calendarPlus")}</span>
-          <strong>预约办理</strong>
-          <small>选择下周号段并提交预约</small>
-        </button>
-        <button class="quick-card action-card alt" data-action="nav" data-view="my-bookings">
-          <span class="quick-icon">${quickIcon("statusList")}</span>
-          <strong>预约状态查看及催办</strong>
-          <small>查看审核、取消、完结与过号记录</small>
-        </button>
-        ${metric("本单位待审核预约", pendingCount, "条")}
-        ${metric("本单位已通过预约", activeCount, "条")}
-        ${metric("全部可预约号段", slots.length, "个")}
+    <header class="user-home-header section">
+      <div>
+        <p class="home-eyebrow">${escapeHtml(user.name)}，你好</p>
+        <h1>选择下周到场时间</h1>
+        <p>点击日期和时间即可开始预约。</p>
       </div>
-    </section>
-    <section class="section surface">
-      <div class="section-header">
-        <div>
-          <h2>下周可预约号段</h2>
-          <p>选择合适的日期和时间，提交后可在“我的预约”中查看进度。</p>
-        </div>
-        <button class="btn btn-primary" data-action="nav" data-view="booking-form">新建预约</button>
+      <button class="booking-snapshot" data-action="nav" data-view="my-bookings" aria-label="查看我的预约">
+        <span><small>待审核</small><strong>${pendingCount}</strong></span>
+        <span><small>待到场</small><strong>${activeCount}</strong></span>
+        <span class="snapshot-arrow" aria-hidden="true">›</span>
+      </button>
+    </header>
+    ${restriction.status === "eligible" ? "" : restrictionNotice(restriction)}
+    <section class="material-card weekly-booking-panel section">
+      <div class="weekly-panel-heading">
+        <div><p>下周号段</p><h2>可预约时间</h2></div>
+        <span class="availability-count">${openSlots.length} 个可选</span>
       </div>
-      <div class="section-body">
-        ${slotCards(slots, "book-slot")}
-      </div>
+      ${renderWeekSlotPicker(slots, { action: "book-slot" })}
     </section>
     ${renderPolicyDisclosure()}
   `;
@@ -276,38 +274,52 @@ function renderBookingForm(source) {
   const isAdminProxy = source === "adminProxy";
   const includeTemporary = ui.params.temporary === "1" || isAdminProxy;
   const user = api.currentUser();
-  const slots = api.listBookableSlots({ includeTemporary, audienceType: isAdminProxy ? null : audienceTypeForUnit(user.unitType) });
-  const selectedSlotId = ui.params.slotId || slots[0]?.id || "";
-  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) || slots[0];
-  const availableTypes = api.state.appointmentTypes.filter((type) => type.enabled && (isAdminProxy || !selectedSlot || type.audienceTypes.includes(selectedSlot.audienceType)));
+  let slots = api.listBookableSlots({
+    includeTemporary,
+    audienceType: isAdminProxy ? null : audienceTypeForUnit(user.unitType),
+    includeFull: !isAdminProxy
+  });
+  if (!isAdminProxy && ui.params.temporary === "1") slots = slots.filter((slot) => slot.kind === "temporary");
+  const openSlots = slots.filter((slot) => slot.remaining > 0);
+  const requestedSlot = openSlots.find((slot) => slot.id === ui.params.slotId);
+  const selectedSlot = requestedSlot || openSlots[0];
+  const selectedSlotId = selectedSlot?.id || "";
+  const availableTypes = api.state.appointmentTypes.filter((type) => type.enabled && (!selectedSlot || type.audienceTypes.includes(selectedSlot.audienceType)));
   if (!slots.length) {
     return `${isAdminProxy ? "" : renderUserPageHeader("新建预约", "当前没有符合账号类别的可预约号段", "calendarPlus")}<section class="material-card empty-state">${empty("暂无可预约号段，请稍后再试")}</section>`;
   }
+  if (!isAdminProxy && !openSlots.length) {
+    return `
+      <div class="user-flow">
+        ${renderUserPageHeader("新建预约", "本周号段目前均已约满", "calendarPlus")}
+        <section class="material-card form-section">
+          ${renderWeekSlotPicker(slots, { action: "select-calendar-slot" })}
+        </section>
+      </div>
+    `;
+  }
   return `
     <div class="${isAdminProxy ? "" : "user-flow"}">
-      ${isAdminProxy ? "" : renderUserPageHeader("新建预约", "选择号段并确认联系信息", "calendarPlus")}
+      ${isAdminProxy ? "" : renderUserPageHeader(ui.params.temporary === "1" ? "临时预约" : "新建预约", "先选到场时间，再确认办理业务", "calendarPlus")}
       <form data-form="booking" class="booking-compose">
         <input type="hidden" name="source" value="${isAdminProxy ? "adminProxy" : "user"}" />
         ${!isAdminProxy ? `<input type="hidden" name="unitType" value="${user.unitType}" />` : ""}
         <section class="material-card form-section">
-          <div class="form-section-title"><span class="step-marker">1</span><div><h2>预约安排</h2><p>选择可用号段和本次办理业务</p></div></div>
-          <div class="material-form-grid">
-            <label class="md-field md-field-wide"><span>预约号段</span><select name="slotId" data-role="booking-slot" required>${slots.map((slot) => `<option value="${slot.id}" ${slot.id === selectedSlotId ? "selected" : ""}>${slot.date} ${slot.start}-${slot.end} · ${slot.audienceTypeName}号 · ${slot.warehouseName} · 剩余 ${slot.remaining}</option>`).join("")}</select><small>仅显示当前账号可办理的号段</small></label>
-            <label class="md-field"><span>预约类型</span><select name="typeCode" data-role="booking-type" required>${availableTypes.map((type) => `<option value="${type.code}">${type.name}</option>`).join("")}</select></label>
-            ${isAdminProxy ? `<label class="md-field"><span>单位类型</span><select name="unitType"><option value="supplier">供应商</option><option value="carrier">承运商</option><option value="construction">领料单位</option></select></label>` : `<div class="md-readonly"><span>号段类别</span><strong data-role="selected-audience">${selectedSlot?.audienceTypeName || "-"}</strong></div>`}
-          </div>
+          <div class="form-section-title"><span class="step-marker">1</span><div><h2>到场时间</h2><p>${isAdminProxy ? "选择可用号段" : "直接点击日期和时间"}</p></div></div>
+          ${isAdminProxy ? `
+            <div class="material-form-grid">
+              <label class="md-field md-field-wide"><span>预约号段</span><select name="slotId" data-role="booking-slot" required>${slots.map((slot) => `<option value="${slot.id}" ${slot.id === selectedSlotId ? "selected" : ""}>${slot.date} ${slot.start}-${slot.end} · ${slot.audienceTypeName}号 · ${slot.warehouseName} · 剩余 ${slot.remaining}</option>`).join("")}</select></label>
+              <label class="md-field"><span>单位类型</span><select name="unitType"><option value="supplier">供应商</option><option value="carrier">承运商</option><option value="construction">领料单位</option></select></label>
+            </div>
+          ` : `${renderWeekSlotPicker(slots, { selectedSlotId, action: "select-calendar-slot" })}<input type="hidden" name="slotId" value="${selectedSlotId}" required />`}
         </section>
         <section class="material-card form-section">
-          <div class="form-section-title"><span class="step-marker">2</span><div><h2>联系信息</h2><p>用于审核结果和到场提醒</p></div></div>
-          <div class="material-form-grid">
-            <label class="md-field md-field-wide"><span>所属公司全称</span><input name="companyName" value="${escapeAttr(isAdminProxy ? "代约单位" : user.unitName)}" required /></label>
-            <label class="md-field"><span>联系人</span><input name="contactName" value="${escapeAttr(isAdminProxy ? "" : user.name)}" required /></label>
-            <label class="md-field"><span>联系方式</span><input name="contactPhone" inputmode="tel" value="${escapeAttr(isAdminProxy ? "" : user.phone)}" required /></label>
-            <label class="md-field md-field-wide"><span>业务单号（选填）</span><input name="businessNo" placeholder="可关联调令、配送或领料单号" /></label>
-          </div>
+          <div class="form-section-title"><span class="step-marker">2</span><div><h2>办理业务</h2><p>选择本次到仓事项</p></div></div>
+          ${isAdminProxy ? `<label class="md-field"><span>预约类型</span><select name="typeCode" data-role="booking-type" required>${availableTypes.map((type) => `<option value="${type.code}">${type.name}</option>`).join("")}</select></label>` : renderBusinessTypeOptions(availableTypes)}
         </section>
+        ${isAdminProxy ? renderAdminContactFields() : renderContactDisclosure(user)}
         <div class="material-action-bar">
-          <button class="btn btn-plain" type="button" data-action="nav" data-view="${isAdminProxy ? "booking-review" : "slots"}">返回</button>
+          <div class="selected-slot-summary"><small>已选时间</small><strong data-role="selected-slot-summary">${escapeHtml(slotSelectionSummary(selectedSlot))}</strong></div>
           <button class="btn btn-primary material-primary" type="submit">提交预约</button>
         </div>
       </form>
@@ -319,30 +331,38 @@ function renderMyBookings() {
   const user = api.currentUser();
   const bookings = api.listBookings().filter((booking) => booking.requesterUserId === user.id);
   const records = api.operationRecords({ limit: 8 }).filter((record) => record.unitName === user.unitName);
+  const currentCount = bookings.filter(isCurrentBooking).length;
+  const historyCount = bookings.length - currentCount;
   return `
     <div class="user-flow">
       ${renderUserPageHeader("我的预约", "查看审核进度和履约结果", "statusList")}
-      <section class="material-card section">
+      <section class="section booking-list-section">
+        <div class="booking-filters" role="tablist" aria-label="预约记录筛选">
+          <button class="active" data-action="filter-bookings" data-filter="all" role="tab" aria-selected="true">全部 <span>${bookings.length}</span></button>
+          <button data-action="filter-bookings" data-filter="current" role="tab" aria-selected="false">进行中 <span>${currentCount}</span></button>
+          <button data-action="filter-bookings" data-filter="history" role="tab" aria-selected="false" ${historyCount ? "" : "disabled"}>已结束 <span>${historyCount}</span></button>
+        </div>
         <div class="section-body material-card-body">
         ${bookings.length ? bookingCards(bookings, true) : empty("暂无预约记录")}
         </div>
       </section>
-      <section class="material-card section activity-section">
-        <div class="material-section-heading"><div><h2>最近动态</h2><p>提交、审核、取消和履约记录</p></div></div>
+      <details class="material-card section activity-disclosure">
+        <summary><span><strong>操作记录</strong><small>提交、审核、取消和履约记录</small></span><span>查看</span></summary>
         <div class="section-body">${operationRecordCards(records)}</div>
-      </section>
+      </details>
     </div>
   `;
 }
 
 function renderTempBooking() {
-  const slots = api.listBookableSlots({ includeTemporary: true }).filter((slot) => slot.kind === "temporary");
+  const user = api.currentUser();
+  const slots = api.listBookableSlots({ includeTemporary: true, includeFull: true, audienceType: audienceTypeForUnit(user.unitType) }).filter((slot) => slot.kind === "temporary");
   return `
     <div class="user-flow">
-      ${renderUserPageHeader("临时预约", "仅展示仓库创建且中心审核通过的临时号段", "clock")}
-      <section class="material-card section"><div class="section-body material-card-body">
-        ${slotCards(slots, "temp-book-slot")}
-      </div></section>
+      ${renderUserPageHeader("临时预约", "选择已开放的临时时间", "clock")}
+      <section class="material-card form-section section">
+        ${slots.length ? renderWeekSlotPicker(slots, { action: "temp-book-slot", emptyLabel: "当天没有临时号段" }) : empty("暂无已开放的临时号段")}
+      </section>
     </div>
   `;
 }
@@ -681,13 +701,52 @@ function renderStats() {
   `;
 }
 
-function renderUserHero() {
+function renderBusinessTypeOptions(types, selectedCode = "") {
+  const selected = types.some((type) => type.code === selectedCode) ? selectedCode : types[0]?.code;
   return `
-    <section class="hero-panel section">
-      <div>
-        <p class="hero-kicker">仓库预约服务</p>
-        <h2>提前安排，按时到场</h2>
-        <p>选择合适的仓库和时间，清晰掌握预约进度。</p>
+    <div class="business-type-grid" data-role="booking-types">
+      ${businessTypeOptionsMarkup(types, selected)}
+    </div>
+  `;
+}
+
+function businessTypeOptionsMarkup(types, selectedCode = "") {
+  const selected = types.some((type) => type.code === selectedCode) ? selectedCode : types[0]?.code;
+  return types.map((type) => `
+    <label class="business-type-option">
+      <input type="radio" name="typeCode" value="${type.code}" ${type.code === selected ? "checked" : ""} required />
+      <span><strong>${escapeHtml(type.name)}</strong><small>${escapeHtml(businessTypeDescription(type.code))}</small></span>
+    </label>
+  `).join("");
+}
+
+function renderContactDisclosure(user) {
+  return `
+    <details class="material-card contact-disclosure">
+      <summary>
+        <span class="contact-summary-icon">${quickIcon("user")}</span>
+        <span class="contact-summary-copy"><strong>联系信息</strong><small>${escapeHtml(user.unitName)} · ${escapeHtml(user.name)} ${escapeHtml(user.phone)}</small></span>
+        <span class="contact-edit">修改</span>
+      </summary>
+      <div class="contact-fields material-form-grid">
+        <label class="md-field md-field-wide"><span>所属公司全称</span><input name="companyName" value="${escapeAttr(user.unitName)}" required /></label>
+        <label class="md-field"><span>联系人</span><input name="contactName" value="${escapeAttr(user.name)}" required /></label>
+        <label class="md-field"><span>联系方式</span><input name="contactPhone" inputmode="tel" value="${escapeAttr(user.phone)}" required /></label>
+        <label class="md-field md-field-wide"><span>业务单号（选填）</span><input name="businessNo" placeholder="可关联调令、配送或领料单号" /></label>
+      </div>
+    </details>
+  `;
+}
+
+function renderAdminContactFields() {
+  return `
+    <section class="material-card form-section">
+      <div class="form-section-title"><span class="step-marker">3</span><div><h2>联系信息</h2><p>填写实际预约单位和联系人</p></div></div>
+      <div class="material-form-grid">
+        <label class="md-field md-field-wide"><span>所属公司全称</span><input name="companyName" value="代约单位" required /></label>
+        <label class="md-field"><span>联系人</span><input name="contactName" required /></label>
+        <label class="md-field"><span>联系方式</span><input name="contactPhone" inputmode="tel" required /></label>
+        <label class="md-field md-field-wide"><span>业务单号（选填）</span><input name="businessNo" placeholder="可关联调令、配送或领料单号" /></label>
       </div>
     </section>
   `;
@@ -725,6 +784,11 @@ function quickIcon(name) {
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
       </svg>
+    `,
+    user: `
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/>
+      </svg>
     `
   };
   return icons[name] || "";
@@ -744,48 +808,89 @@ function renderPolicyDisclosure() {
   `;
 }
 
-function slotCards(slots, action) {
-  if (!slots.length) return empty("暂无可预约号段");
+function renderWeekSlotPicker(slots, { selectedSlotId = "", action = "select-calendar-slot", emptyLabel = "当天暂无开放号段" } = {}) {
+  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId && slot.remaining > 0);
+  const anchorDate = selectedSlot?.date || slots[0]?.date;
+  if (!anchorDate) return empty("暂无可预约号段");
+  const weekDates = calendarWeek(anchorDate);
+  const activeDate = selectedSlot?.date || slots.find((slot) => weekDates.includes(slot.date))?.date || weekDates[0];
+  const weekStart = parseCalendarDate(weekDates[0]);
+  const weekEnd = parseCalendarDate(weekDates[6]);
   return `
-    <div class="card-list">
-      ${slots.map((slot) => `
-        <article class="item-card">
-          <h3>${slot.date} ${slot.start}-${slot.end}</h3>
-          <div class="meta">
-            <span>${slot.stationName} · ${slot.warehouseName}</span>
-            <span>${slot.audienceTypeName}号</span>
-            <span>容量 ${slot.capacity}，已约 ${slot.booked}，剩余 ${slot.remaining}</span>
-            <span>${slot.kind === "temporary" ? tag("临时号段", "warning") : tag("普通号段", "info")} ${statusTag(slot.status)}</span>
-          </div>
-          <div class="actions">
-            <button class="btn btn-primary" data-action="${action}" data-slot-id="${slot.id}">预约</button>
-          </div>
-        </article>
-      `).join("")}
+    <div class="week-slot-picker" data-week-picker>
+      <div class="week-picker-toolbar">
+        <div><small>${weekStart.getFullYear()} 年</small><strong>${formatMonthDay(weekStart)} - ${formatMonthDay(weekEnd)}</strong></div>
+        <div class="capacity-legend" aria-label="余量图例"><span><i class="open"></i>可约</span><span><i class="limited"></i>紧张</span><span><i class="full"></i>已满</span></div>
+      </div>
+      <div class="week-day-grid" role="tablist" aria-label="按日期选择">
+        ${weekDates.map((dateText) => renderCalendarDay(dateText, slots.filter((slot) => slot.date === dateText), dateText === activeDate)).join("")}
+      </div>
+      <div class="selected-day-heading"><strong data-role="selected-day-label">${formatFullCalendarDate(activeDate)}</strong><span>选择到场时间</span></div>
+      <div class="time-slot-grid">
+        ${slots
+          .slice()
+          .sort((left, right) => `${left.date}${left.start}`.localeCompare(`${right.date}${right.start}`))
+          .map((slot) => renderCalendarSlot(slot, action, slot.id === selectedSlot?.id, slot.date !== activeDate))
+          .join("")}
+      </div>
+      <div class="calendar-empty" data-role="calendar-empty" ${slots.some((slot) => slot.date === activeDate) ? "hidden" : ""}>${escapeHtml(emptyLabel)}</div>
     </div>
+  `;
+}
+
+function renderCalendarDay(dateText, slots, active) {
+  const date = parseCalendarDate(dateText);
+  const totalCapacity = slots.reduce((sum, slot) => sum + slot.capacity, 0);
+  const totalRemaining = slots.reduce((sum, slot) => sum + slot.remaining, 0);
+  const openCount = slots.filter((slot) => slot.remaining > 0).length;
+  const state = !slots.length ? "empty" : totalRemaining === 0 ? "full" : totalRemaining / totalCapacity <= 0.35 ? "limited" : "open";
+  const summary = !slots.length ? "未开放" : totalRemaining === 0 ? "已满" : `${openCount} 个时段`;
+  return `
+    <button type="button" class="calendar-day ${state} ${active ? "active" : ""}" data-action="select-calendar-day" data-date="${dateText}" data-date-label="${escapeAttr(formatFullCalendarDate(dateText))}" role="tab" aria-selected="${active}" ${slots.length ? "" : "disabled"}>
+      <span>${weekdayLabel(date)}</span>
+      <strong>${date.getDate()}</strong>
+      <small>${summary}</small>
+      <i class="day-capacity-bar"><b style="width:${totalCapacity ? Math.round((totalRemaining / totalCapacity) * 100) : 0}%"></b></i>
+    </button>
+  `;
+}
+
+function renderCalendarSlot(slot, action, selected, hidden) {
+  const full = slot.remaining < 1;
+  const level = full ? "full" : slot.remaining === 1 || slot.remaining / slot.capacity <= 0.35 ? "limited" : "open";
+  const usedPercent = slot.capacity ? Math.min(100, Math.round((slot.booked / slot.capacity) * 100)) : 0;
+  return `
+    <button type="button" class="calendar-time-slot ${level} ${selected ? "selected" : ""}" data-action="${action}" data-slot-id="${slot.id}" data-slot-date="${slot.date}" data-summary="${escapeAttr(slotSelectionSummary(slot))}" aria-pressed="${selected}" ${full ? "disabled" : ""} ${hidden ? "hidden" : ""}>
+      <span class="slot-time"><strong>${slot.start}</strong><small>至 ${slot.end}</small></span>
+      <span class="slot-place">${escapeHtml(slot.warehouseName)}</span>
+      <span class="slot-remaining">${full ? "已满" : `余 ${slot.remaining}`}</span>
+      <i class="slot-capacity-track"><b style="width:${usedPercent}%"></b></i>
+      <small class="slot-capacity-copy">${slot.booked}/${slot.capacity} 已预约</small>
+    </button>
   `;
 }
 
 function bookingCards(bookings, allowCancel) {
   return `
-    <div class="card-list">
+    <div class="booking-card-list" data-role="booking-list">
       ${bookings.map((booking) => {
         const cancel = canCancelBooking(booking, new Date("2026-07-31T10:00:00"));
+        const date = parseCalendarDate(booking.date);
+        const group = isCurrentBooking(booking) ? "current" : "history";
         return `
-          <article class="item-card">
-            <h3>${booking.id}</h3>
-            <div class="meta">
-              <span>${booking.date} ${booking.start}-${booking.end}</span>
-              <span>${booking.warehouseName}</span>
-              <span>${booking.typeName} · ${booking.companyName}</span>
-              <span>${booking.audienceTypeName}号 · ${statusTag(booking.status)} ${booking.slotKind === "temporary" ? tag("临时预约", "warning") : ""}</span>
-              <span>${closureResultTag(booking)}</span>
-              <span>${cancel.ok ? "可取消" : cancel.reason}</span>
+          <article class="booking-card" data-booking-group="${group}">
+            <div class="booking-card-main">
+              <time class="booking-date"><span>${date.getMonth() + 1}月</span><strong>${String(date.getDate()).padStart(2, "0")}</strong><small>${weekdayLabel(date)}</small></time>
+              <div class="booking-primary">
+                <div class="booking-title-row"><h3>${booking.start}-${booking.end}</h3>${statusTag(booking.status)}</div>
+                <p>${escapeHtml(booking.warehouseName)} · ${escapeHtml(booking.typeName)}</p>
+                <small>${escapeHtml(bookingStatusHint(booking))}</small>
+              </div>
             </div>
-            <div class="actions">
+            <div class="booking-card-actions">
               ${allowCancel && cancel.ok ? `<button class="btn btn-danger" data-action="cancel-booking" data-booking-id="${booking.id}">取消预约</button>` : ""}
             </div>
-            <details class="booking-details"><summary>查看详情</summary><div><p>联系人：${escapeHtml(booking.contactName)} ${escapeHtml(booking.contactPhone)}</p><p>预约来源：${booking.source === "adminProxy" ? "管理端代约" : "用户提交"}</p><p>最近记录：${escapeHtml(booking.history?.at(-1)?.note || "暂无")}</p></div></details>
+            <details class="booking-details"><summary>预约详情</summary><div><p>预约编号：${escapeHtml(booking.id)}</p><p>号段类别：${escapeHtml(booking.audienceTypeName)}号 ${booking.slotKind === "temporary" ? "· 临时预约" : ""}</p><p>联系人：${escapeHtml(booking.contactName)} ${escapeHtml(booking.contactPhone)}</p><p>预约来源：${booking.source === "adminProxy" ? "管理端代约" : "用户提交"}</p><p>最近记录：${escapeHtml(booking.history?.at(-1)?.note || "暂无")}</p></div></details>
           </article>
         `;
       }).join("")}
@@ -995,16 +1100,87 @@ function submitBooking(form) {
 function updateBookingTypeOptions(form, slotSelectionId) {
   if (!form) return;
   const includeTemporary = form.elements.source?.value === "adminProxy" || ui.params.temporary === "1";
-  const slot = api.listBookableSlots({ includeTemporary }).find((item) => item.id === slotSelectionId);
+  const slot = api.listBookableSlots({ includeTemporary, includeFull: true }).find((item) => item.id === slotSelectionId);
   if (!slot) return;
   const types = api.state.appointmentTypes.filter((type) => type.enabled && type.audienceTypes.includes(slot.audienceType));
   const typeSelect = form.querySelector("[data-role='booking-type']");
   if (typeSelect) typeSelect.innerHTML = types.map((type) => `<option value="${type.code}">${type.name}</option>`).join("");
-  const audience = form.querySelector("[data-role='selected-audience']");
-  if (audience) audience.textContent = slot.audienceTypeName;
+  const typeOptions = form.querySelector("[data-role='booking-types']");
+  if (typeOptions) {
+    const currentCode = typeOptions.querySelector("input:checked")?.value || "";
+    typeOptions.innerHTML = businessTypeOptionsMarkup(types, currentCode);
+  }
+  const summary = form.querySelector("[data-role='selected-slot-summary']");
+  if (summary) summary.textContent = slotSelectionSummary(slot);
   if (form.elements.source?.value === "adminProxy" && form.elements.unitType) {
     form.elements.unitType.value = { supplier: "supplier", carrier: "carrier", pickupUnit: "construction" }[slot.audienceType] || "supplier";
   }
+}
+
+function selectCalendarDay(button) {
+  const picker = button.closest("[data-week-picker]");
+  if (!picker || button.disabled) return;
+  const date = button.dataset.date;
+  picker.querySelectorAll(".calendar-day").forEach((item) => {
+    const active = item === button;
+    item.classList.toggle("active", active);
+    item.setAttribute("aria-selected", String(active));
+  });
+  const slots = [...picker.querySelectorAll(".calendar-time-slot")];
+  slots.forEach((item) => { item.hidden = item.dataset.slotDate !== date; });
+  const emptyState = picker.querySelector("[data-role='calendar-empty']");
+  if (emptyState) emptyState.hidden = slots.some((item) => item.dataset.slotDate === date);
+  const dayLabel = picker.querySelector("[data-role='selected-day-label']");
+  if (dayLabel) dayLabel.textContent = button.dataset.dateLabel;
+
+  const form = picker.closest("form");
+  if (!form) return;
+  const current = picker.querySelector(".calendar-time-slot.selected");
+  if (current?.dataset.slotDate === date) return;
+  const firstAvailable = slots.find((item) => item.dataset.slotDate === date && !item.disabled);
+  if (firstAvailable) selectCalendarSlot(firstAvailable);
+  else clearCalendarSelection(form, picker);
+}
+
+function selectCalendarSlot(button) {
+  const picker = button.closest("[data-week-picker]");
+  const form = button.closest("form");
+  if (!picker || !form || button.disabled) return;
+  picker.querySelectorAll(".calendar-time-slot").forEach((item) => {
+    const selected = item === button;
+    item.classList.toggle("selected", selected);
+    item.setAttribute("aria-pressed", String(selected));
+  });
+  if (form.elements.slotId) form.elements.slotId.value = button.dataset.slotId;
+  updateBookingTypeOptions(form, button.dataset.slotId);
+  const submit = form.querySelector("button[type='submit']");
+  if (submit) submit.disabled = false;
+}
+
+function clearCalendarSelection(form, picker) {
+  picker.querySelectorAll(".calendar-time-slot").forEach((item) => {
+    item.classList.remove("selected");
+    item.setAttribute("aria-pressed", "false");
+  });
+  if (form.elements.slotId) form.elements.slotId.value = "";
+  const summary = form.querySelector("[data-role='selected-slot-summary']");
+  if (summary) summary.textContent = "请选择有余量的时间";
+  const submit = form.querySelector("button[type='submit']");
+  if (submit) submit.disabled = true;
+}
+
+function filterBookingCards(button) {
+  const panel = button.closest(".booking-list-section");
+  if (!panel) return;
+  const filter = button.dataset.filter;
+  panel.querySelectorAll("[data-action='filter-bookings']").forEach((item) => {
+    const active = item === button;
+    item.classList.toggle("active", active);
+    item.setAttribute("aria-selected", String(active));
+  });
+  panel.querySelectorAll("[data-booking-group]").forEach((card) => {
+    card.hidden = filter !== "all" && card.dataset.bookingGroup !== filter;
+  });
 }
 
 function submitAdjustment(form) {
@@ -1045,6 +1221,78 @@ function assessmentTag(type) {
   if (type === "cancel") return tag("取消", "warning");
   if (type === "noShow") return tag("过号", "danger");
   return tag("普通", "default");
+}
+
+function businessTypeDescription(code) {
+  return {
+    SUPPLIER_DELIVERY: "物资送达仓库",
+    TRANSFER_OUT: "调配物资出库",
+    TRANSFER_IN: "调配物资入库",
+    CONSTRUCT_PICKUP: "到仓领取物资"
+  }[code] || "仓库预约业务";
+}
+
+function parseCalendarDate(dateText) {
+  return new Date(`${dateText}T00:00:00`);
+}
+
+function calendarDateText(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function calendarWeek(anchorDateText) {
+  const anchor = parseCalendarDate(anchorDateText);
+  const mondayOffset = (anchor.getDay() + 6) % 7;
+  anchor.setDate(anchor.getDate() - mondayOffset);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(anchor);
+    date.setDate(anchor.getDate() + index);
+    return calendarDateText(date);
+  });
+}
+
+function weekdayLabel(date) {
+  return ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][date.getDay()];
+}
+
+function formatMonthDay(date) {
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function formatFullCalendarDate(dateText) {
+  const date = parseCalendarDate(dateText);
+  return `${formatMonthDay(date)} ${weekdayLabel(date)}`;
+}
+
+function slotSelectionSummary(slot) {
+  if (!slot) return "请选择到场时间";
+  return `${formatFullCalendarDate(slot.date)} ${slot.start}-${slot.end} · ${slot.warehouseName}`;
+}
+
+function isCurrentBooking(booking) {
+  return ![
+    BookingStatus.REJECTED,
+    BookingStatus.CANCELLED,
+    BookingStatus.COMPLETED,
+    BookingStatus.NO_SHOW,
+    BookingStatus.AUTO_NO_SHOW
+  ].includes(booking.status);
+}
+
+function bookingStatusHint(booking) {
+  return {
+    [BookingStatus.SUBMITTED]: "已提交，等待仓库审核",
+    [BookingStatus.APPROVED]: "审核通过，请按预约时间到场",
+    [BookingStatus.PENDING_COMPLETION]: "当前处于履约办理阶段",
+    [BookingStatus.MISSED_WINDOW]: "原预约时间未到场，等待后续处理",
+    [BookingStatus.ADJUSTMENT_PENDING]: "时间调整申请正在审批",
+    [BookingStatus.RESCHEDULED]: "已调整时间，请按新时间到场",
+    [BookingStatus.COMPLETED]: booking.closureType === "exception" ? "已完成异常履约闭环" : "已按时完成履约",
+    [BookingStatus.REJECTED]: "预约未通过，可在详情中查看原因",
+    [BookingStatus.CANCELLED]: "预约已取消",
+    [BookingStatus.NO_SHOW]: "未到现场，流程已关闭",
+    [BookingStatus.AUTO_NO_SHOW]: "系统已按未到现场关闭流程"
+  }[booking.status] || statusLabel(booking.status);
 }
 
 function formatTime(value) {

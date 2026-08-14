@@ -139,6 +139,36 @@ export function createInitialState() {
         history: [{ action: "approve", actor: "李明辉", note: "中心审核通过", at: "2026-07-31T08:20:00.000Z" }]
       },
       {
+        id: "slot-0804-0900",
+        kind: "normal",
+        status: SlotStatus.BOOKABLE,
+        warehouseId: "wh-xs",
+        date: "2026-08-04",
+        start: "09:00",
+        end: "10:00",
+        capacity: 6,
+        booked: 2,
+        capacityMode: "fixed",
+        audienceCapacities: { supplier: 3, carrier: 2, pickupUnit: 1 },
+        audienceBooked: { supplier: 2, carrier: 0, pickupUnit: 0 },
+        history: [{ action: "approve", actor: "李明辉", note: "中心审核通过", at: "2026-07-31T08:25:00.000Z" }]
+      },
+      {
+        id: "slot-0805-1000-full",
+        kind: "normal",
+        status: SlotStatus.BOOKABLE,
+        warehouseId: "wh-xs",
+        date: "2026-08-05",
+        start: "10:00",
+        end: "11:00",
+        capacity: 2,
+        booked: 2,
+        capacityMode: "fixed",
+        audienceCapacities: { supplier: 1, carrier: 1, pickupUnit: 0 },
+        audienceBooked: { supplier: 1, carrier: 1, pickupUnit: 0 },
+        history: [{ action: "approve", actor: "李明辉", note: "中心审核通过", at: "2026-07-31T08:30:00.000Z" }]
+      },
+      {
         id: "slot-0804-1030",
         kind: "normal",
         status: SlotStatus.PENDING_REVIEW,
@@ -316,14 +346,14 @@ export function createApi(state, persist = () => {}) {
       return getRestriction(user || {}, api.state.config);
     },
 
-    listBookableSlots({ includeTemporary = false, audienceType = null } = {}) {
+    listBookableSlots({ includeTemporary = false, audienceType = null, includeFull = false } = {}) {
       return api.state.slots
         .filter((slot) => slot.status === SlotStatus.BOOKABLE)
         .filter((slot) => includeTemporary || slot.kind === "normal")
         .filter((slot) => includeTemporary || isBookNextWeek(slot.date, new Date("2026-07-31T10:00:00")))
         .flatMap((slot) => expandSlotOfferings(api.state, slot))
         .filter((slot) => !audienceType || slot.audienceType === audienceType)
-        .filter((slot) => slot.remaining > 0);
+        .filter((slot) => includeFull || slot.remaining > 0);
     },
 
     listSlots(filter = {}) {
@@ -477,6 +507,7 @@ export function createApi(state, persist = () => {}) {
         companyName: input.companyName.trim(),
         contactName: input.contactName.trim(),
         contactPhone: input.contactPhone.trim(),
+        businessNo: input.businessNo?.trim() || "",
         typeCode: input.typeCode,
         warehouseId: slot.warehouseId,
         date: slot.date,
@@ -1022,7 +1053,11 @@ function normalizeState(state) {
     ...type,
     audienceTypes: type.audienceTypes || inferAudienceTypesForBusiness(type.code)
   }));
-  const slots = (state.slots || base.slots).map(normalizeSlot);
+  const storedSlots = state.slots || [];
+  const slots = [
+    ...storedSlots,
+    ...base.slots.filter((baseSlot) => !storedSlots.some((slot) => slot.id === baseSlot.id))
+  ].map(normalizeSlot);
   const bookings = (state.bookings || base.bookings).map(normalizeBooking);
   return {
     ...base,

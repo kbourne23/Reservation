@@ -168,6 +168,18 @@ function testAdminProxyUsesWarehouseAdminIdentity() {
   assert.equal(result.booking.source, "adminProxy");
 }
 
+function testFullSlotsCanBeListedForCalendar() {
+  const api = createApi(createInitialState(), () => {});
+  const slot = api.state.slots.find((item) => item.id === "slot-0803-0830");
+  slot.audienceBooked.supplier = slot.audienceCapacities.supplier;
+  slot.booked = Object.values(slot.audienceBooked).reduce((sum, value) => sum + value, 0);
+
+  const normalList = api.listBookableSlots({ audienceType: "supplier" });
+  const calendarList = api.listBookableSlots({ audienceType: "supplier", includeFull: true });
+  assert.equal(normalList.some((item) => item.slotPlanId === slot.id), false);
+  assert.equal(calendarList.find((item) => item.slotPlanId === slot.id).remaining, 0);
+}
+
 testSlotStateMachine();
 testBookingLifecycle();
 testCancelWindowAndRestriction();
@@ -177,5 +189,6 @@ testSharedCapacityAcrossAudiences();
 testExceptionAdjustmentClosure();
 testAutoNoShowClosureIsIdempotent();
 testAdminProxyUsesWarehouseAdminIdentity();
+testFullSlotsCanBeListedForCalendar();
 
 console.log("smoke tests passed");
