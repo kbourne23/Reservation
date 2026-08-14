@@ -14,9 +14,18 @@ export const BookingStatus = Object.freeze({
   REJECTED: "rejected",
   CANCELLED: "cancelled",
   PENDING_COMPLETION: "pendingCompletion",
+  MISSED_WINDOW: "missedWindow",
+  ADJUSTMENT_PENDING: "adjustmentPending",
+  RESCHEDULED: "rescheduled",
   COMPLETED: "completed",
   NO_SHOW: "noShow",
-  AUTO_COMPLETED: "autoCompleted"
+  AUTO_NO_SHOW: "autoNoShow"
+});
+
+export const AudienceType = Object.freeze({
+  SUPPLIER: "supplier",
+  CARRIER: "carrier",
+  PICKUP_UNIT: "pickupUnit"
 });
 
 export const RestrictionStatus = Object.freeze({
@@ -59,8 +68,25 @@ const bookingTransitions = {
   },
   [BookingStatus.PENDING_COMPLETION]: {
     complete: BookingStatus.COMPLETED,
+    missWindow: BookingStatus.MISSED_WINDOW,
     noShow: BookingStatus.NO_SHOW,
-    autoComplete: BookingStatus.AUTO_COMPLETED
+    autoCloseNoShow: BookingStatus.AUTO_NO_SHOW
+  },
+  [BookingStatus.MISSED_WINDOW]: {
+    requestAdjustment: BookingStatus.ADJUSTMENT_PENDING,
+    noShow: BookingStatus.NO_SHOW,
+    autoCloseNoShow: BookingStatus.AUTO_NO_SHOW
+  },
+  [BookingStatus.ADJUSTMENT_PENDING]: {
+    approveAdjustment: BookingStatus.RESCHEDULED,
+    rejectAdjustment: BookingStatus.MISSED_WINDOW,
+    noShow: BookingStatus.NO_SHOW,
+    autoCloseNoShow: BookingStatus.AUTO_NO_SHOW
+  },
+  [BookingStatus.RESCHEDULED]: {
+    complete: BookingStatus.COMPLETED,
+    noShow: BookingStatus.NO_SHOW,
+    autoCloseNoShow: BookingStatus.AUTO_NO_SHOW
   }
 };
 
@@ -101,6 +127,14 @@ export function validateBookingInput(input) {
     errors.push("联系方式需为 11 位手机号");
   }
   return errors;
+}
+
+export function audienceTypeForUnit(unitType) {
+  return {
+    supplier: AudienceType.SUPPLIER,
+    carrier: AudienceType.CARRIER,
+    construction: AudienceType.PICKUP_UNIT
+  }[unitType] || null;
 }
 
 export function getRestriction(profile, config) {
@@ -162,4 +196,3 @@ export function toDateOnly(value) {
   const date = value instanceof Date ? value : new Date(`${value}T00:00:00`);
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
-

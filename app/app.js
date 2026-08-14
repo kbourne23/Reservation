@@ -1,4 +1,5 @@
 import {
+  audienceTypeLabel,
   createApi,
   loadState,
   resetState,
@@ -6,7 +7,7 @@ import {
   statusLabel,
   unitTypeLabel
 } from "./mock-api.js";
-import { BookingStatus, SlotStatus, canCancelBooking } from "./state-machines.js";
+import { BookingStatus, SlotStatus, audienceTypeForUnit, canCancelBooking } from "./state-machines.js";
 
 const root = document.querySelector("#root");
 let api = createApi(loadState(), saveState);
@@ -27,6 +28,7 @@ const adminNav = [
   { view: "slots", label: "放号管理" },
   { view: "slot-review", label: "号段审核" },
   { view: "booking-review", label: "预约审核" },
+  { view: "fulfillment", label: "履约闭环" },
   { view: "temp-slots", label: "临时号段" },
   { view: "rules", label: "取消/过号" },
   { view: "stats", label: "统计" },
@@ -73,12 +75,18 @@ document.addEventListener("click", (event) => {
       }
     }
   }
-  if (action === "complete-booking") doAction(() => api.completeBooking(target.dataset.bookingId, "张建国"), "已标记完结");
+  if (action === "complete-booking") doAction(() => api.completeBooking(target.dataset.bookingId, "张建国"), "已完成履约闭环");
+  if (action === "miss-window") doAction(() => api.markMissedWindow(target.dataset.bookingId, "张建国"), "已标记原号段未到，请发起同日调整或未到闭环");
   if (action === "no-show-booking") {
     const reason = prompt("请输入过号原因", "未按预约号段到场");
     if (reason !== null) doAction(() => api.noShowBooking(target.dataset.bookingId, reason, "张建国"), "已记录过号");
   }
-  if (action === "auto-complete") doAction(() => api.autoCompleteDueBookings(), "自动完结任务已执行");
+  if (action === "auto-close") doAction(() => api.autoCloseDueBookings(), "自动闭环任务已执行，未履约预约已标记未到现场");
+  if (action === "approve-adjustment") doAction(() => api.approveAdjustment(target.dataset.adjustmentId, "李明辉"), "履约调整已审批通过");
+  if (action === "reject-adjustment") {
+    const reason = prompt("请输入驳回原因", "目标号段安排不合适");
+    if (reason !== null) doAction(() => api.rejectAdjustment(target.dataset.adjustmentId, reason, "李明辉"), "履约调整已驳回");
+  }
   if (action === "reset-counts") doAction(() => api.resetCounts(target.dataset.userId), "违规次数已重置");
 });
 
@@ -98,6 +106,7 @@ document.addEventListener("submit", (event) => {
   const form = event.target;
   if (form.dataset.form === "booking") submitBooking(form);
   if (form.dataset.form === "slot") submitSlotForm(form);
+  if (form.dataset.form === "adjustment") submitAdjustment(form);
   if (form.dataset.form === "config") submitConfig(form);
 });
 
@@ -193,6 +202,7 @@ function renderView() {
   if (ui.view === "slots") return renderAdminSlots();
   if (ui.view === "slot-review") return renderSlotReview();
   if (ui.view === "booking-review") return renderBookingReview();
+  if (ui.view === "fulfillment") return renderFulfillmentWorkbench();
   if (ui.view === "temp-slots") return renderTempSlots();
   if (ui.view === "rules") return renderRules();
   if (ui.view === "stats") return renderStats();
@@ -202,11 +212,11 @@ function renderView() {
 
 function renderUserSlots() {
   const restriction = api.userRestriction();
-  const slots = api.listBookableSlots();
   const user = api.currentUser();
+  const slots = api.listBookableSlots({ audienceType: audienceTypeForUnit(user.unitType) });
   const myBookings = api.listBookings().filter((booking) => booking.requesterUserId === user.id);
   const pendingCount = myBookings.filter((booking) => booking.status === BookingStatus.SUBMITTED).length;
-  const activeCount = myBookings.filter((booking) => booking.status === BookingStatus.APPROVED || booking.status === BookingStatus.PENDING_COMPLETION).length;
+  const activeCount = myBookings.filter((booking) => [BookingStatus.APPROVED, BookingStatus.PENDING_COMPLETION, BookingStatus.MISSED_WINDOW, BookingStatus.ADJUSTMENT_PENDING, BookingStatus.RESCHEDULED].includes(booking.status)).length;
   return `
     ${renderUserHero()}
     ${restrictionNotice(restriction)}
@@ -246,9 +256,11 @@ function renderUserSlots() {
 function renderBookingForm(source) {
   const isAdminProxy = source === "adminProxy";
   const includeTemporary = ui.params.temporary === "1" || isAdminProxy;
-  const slots = api.listBookableSlots({ includeTemporary });
-  const selectedSlotId = ui.params.slotId || slots[0]?.id || "";
   const user = api.currentUser();
+  const slots = api.listBookableSlots({ includeTemporary, audienceType: isAdminProxy ? null : audienceTypeForUnit(user.unitType) });
+  const selectedSlotId = ui.params.slotId || slots[0]?.id || "";
+  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) || slots[0];
+  const availableTypes = api.state.appointmentTypes.filter((type) => type.enabled && (isAdminProxy || !selectedSlot || type.audienceTypes.includes(selectedSlot.audienceType)));
   return `
     <section class="section surface">
       <div class="section-header">
@@ -264,13 +276,13 @@ function renderBookingForm(source) {
             <label class="field">
               <span>预约号段</span>
               <select class="input" name="slotId" required>
-                ${slots.map((slot) => `<option value="${slot.id}" ${slot.id === selectedSlotId ? "selected" : ""}>${slot.date} ${slot.start}-${slot.end} · ${slot.warehouseName} · ${slot.workFaceName} · 剩余 ${slot.remaining}</option>`).join("")}
+                ${slots.map((slot) => `<option value="${slot.id}" ${slot.id === selectedSlotId ? "selected" : ""}>${slot.date} ${slot.start}-${slot.end} · ${slot.audienceTypeName}号 · ${slot.warehouseName} · 剩余 ${slot.remaining}</option>`).join("")}
               </select>
             </label>
             <label class="field">
               <span>预约类型</span>
               <select class="input" name="typeCode" required>
-                ${api.state.appointmentTypes.filter((type) => type.enabled).map((type) => `<option value="${type.code}">${type.name}</option>`).join("")}
+                ${availableTypes.map((type) => `<option value="${type.code}">${type.name}</option>`).join("")}
               </select>
             </label>
             <label class="field">
@@ -438,19 +450,19 @@ function renderTypes() {
       <div class="section-header">
         <div>
           <h2>预约类型管理</h2>
-          <p>默认四类来自需求 TAB；承运商作为单位类型，不新增预约类型。</p>
+          <p>四种业务类型与三类号段容量分别管理，并通过适用关系关联。</p>
         </div>
         <button class="btn btn-primary">新增类型</button>
       </div>
       <div class="section-body table-wrap">
         <table>
-          <thead><tr><th>类型名称</th><th>类型编码</th><th>适用单位类型</th><th>状态</th><th>操作</th></tr></thead>
+          <thead><tr><th>类型名称</th><th>类型编码</th><th>适用号段类别</th><th>状态</th><th>操作</th></tr></thead>
           <tbody>
             ${api.state.appointmentTypes.map((type) => `
               <tr>
                 <td>${type.name}</td>
                 <td>${type.code}</td>
-                <td>${type.unitTypes.map(unitTypeLabel).join("、")}</td>
+                <td>${type.audienceTypes.map(audienceTypeLabel).join("、")}</td>
                 <td>${tag(type.enabled ? "启用" : "禁用", type.enabled ? "success" : "default")}</td>
                 <td><button class="btn btn-small">编辑</button> <button class="btn btn-small">${type.enabled ? "禁用" : "启用"}</button></td>
               </tr>
@@ -470,7 +482,7 @@ function renderAdminSlots() {
         <div class="section-header">
           <div>
             <h2>新增号段</h2>
-            <p>普通号段一小时一个号段，提交中心审核前允许修改和删除。</p>
+            <p>按时间段统一维护供应商、承运商、领料单位三类容量，提交中心审核前允许修改和删除。</p>
           </div>
         </div>
         <div class="section-body">
@@ -519,7 +531,7 @@ function renderSlotReview() {
         ${pending.length ? Object.entries(groups).map(([name, slots]) => `
           <div class="item-card section">
             <h3>${name}</h3>
-            <div class="meta">${slots.map((slot) => `<span>${slot.start}-${slot.end} · ${slot.workFaceName} · ${slot.typeName} · 容量 ${slot.capacity}</span>`).join("")}</div>
+            <div class="meta">${slots.map((slot) => `<span>${slot.start}-${slot.end} · ${slot.workFaceName} · ${slot.audienceSummary}</span>`).join("")}</div>
             <div class="actions">
               ${slots.map((slot) => `<button class="btn btn-small btn-primary" data-action="approve-slot" data-slot-id="${slot.id}">通过 ${slot.start}</button>`).join("")}
               ${slots.map((slot) => `<button class="btn btn-small btn-danger" data-action="reject-slot" data-slot-id="${slot.id}">驳回 ${slot.start}</button>`).join("")}
@@ -533,7 +545,6 @@ function renderSlotReview() {
 
 function renderBookingReview() {
   const pending = api.listBookings({ status: BookingStatus.SUBMITTED });
-  const active = api.listBookings().filter((booking) => booking.status === BookingStatus.APPROVED || booking.status === BookingStatus.PENDING_COMPLETION);
   return `
     <section class="section surface">
       <div class="section-header">
@@ -546,17 +557,65 @@ function renderBookingReview() {
         ${bookingTable(pending, "review")}
       </div>
     </section>
+  `;
+}
+
+function renderFulfillmentWorkbench() {
+  const bookings = api.listBookings();
+  const stats = api.stats();
+  const ready = bookings.filter((booking) => [BookingStatus.APPROVED, BookingStatus.PENDING_COMPLETION].includes(booking.status));
+  const missed = bookings.filter((booking) => booking.status === BookingStatus.MISSED_WINDOW);
+  const rescheduled = bookings.filter((booking) => booking.status === BookingStatus.RESCHEDULED);
+  const pendingAdjustments = api.listAdjustments({ status: "pendingReview" });
+  const closed = bookings.filter((booking) => [BookingStatus.COMPLETED, BookingStatus.NO_SHOW, BookingStatus.AUTO_NO_SHOW].includes(booking.status));
+  return `
+    <div class="grid grid-4 section">
+      ${metric("正常闭环", stats.normalClosedCount, "原号段到场")}
+      ${metric("异常闭环", stats.exceptionClosedCount, "调整后到场")}
+      ${metric("未到现场", stats.noShowClosedCount, "人工或自动闭环")}
+      ${metric("未闭环", stats.openFulfillmentCount, "仍需处置")}
+    </div>
     <section class="section surface">
       <div class="section-header">
         <div>
-          <h2>完结 / 过号处理</h2>
-          <p>当天预约由仓库管理员标记完结或过号；也可执行 00:00 自动完结任务。</p>
+          <h2>待履约</h2>
+          <p>原号段到场可正常办结；号段结束仍未到场时进入异常处置。</p>
         </div>
-        <button class="btn" data-action="auto-complete">执行自动完结</button>
+        <button class="btn" data-action="auto-close">执行当日自动闭环</button>
       </div>
       <div class="section-body table-wrap">
-        ${bookingTable(active, "completion")}
+        ${bookingTable(ready, "fulfillment")}
       </div>
+    </section>
+    <section class="section surface">
+      <div class="section-header">
+        <div>
+          <h2>原号段未到</h2>
+          <p>仓库管理员可发起同仓、同日、晚于原号段的调整申请。</p>
+        </div>
+      </div>
+      <div class="section-body">
+        ${missed.length ? `<div class="card-list">${missed.map(adjustmentRequestCard).join("")}</div>` : empty("暂无待处置的原号段未到预约")}
+      </div>
+    </section>
+    <section class="section surface">
+      <div class="section-header">
+        <div>
+          <h2>调整待审批</h2>
+          <p>中心管理员审批时再次校验目标号段容量，通过后才正式占用。</p>
+        </div>
+      </div>
+      <div class="section-body table-wrap">
+        ${adjustmentTable(pendingAdjustments)}
+      </div>
+    </section>
+    <section class="section surface">
+      <div class="section-header"><div><h2>等待调整后到场</h2><p>到场后记为异常闭环，仍未到场则按未到现场闭环。</p></div></div>
+      <div class="section-body table-wrap">${bookingTable(rescheduled, "fulfillment")}</div>
+    </section>
+    <section class="section surface">
+      <div class="section-header"><div><h2>已闭环</h2><p>分别保留正常闭环、异常闭环和未到现场结果。</p></div></div>
+      <div class="section-body table-wrap">${bookingTable(closed, "closed")}</div>
     </section>
   `;
 }
@@ -647,10 +706,10 @@ function renderStats() {
   const stats = api.stats();
   return `
     <div class="grid grid-4 section">
-      ${metric("预约总数", stats.totalBookings, "含普通和临时预约")}
-      ${metric("待审核预约", stats.pendingBookings, "仓库管理员处理")}
-      ${metric("开放号段", stats.approvedSlots, "已审核通过")}
-      ${metric("临时预约", stats.temporaryCount, "月度统计口径")}
+      ${metric("正常闭环", stats.normalClosedCount, "原号段到场")}
+      ${metric("异常闭环", stats.exceptionClosedCount, "调整后到场")}
+      ${metric("未到现场", stats.noShowClosedCount, "人工或自动闭环")}
+      ${metric("未闭环", stats.openFulfillmentCount, "仍需处置")}
     </div>
     <section class="section surface">
       <div class="section-header">
@@ -661,17 +720,18 @@ function renderStats() {
       </div>
       <div class="section-body table-wrap">
         <table>
-          <thead><tr><th>单位</th><th>单位类型</th><th>预约次数</th><th>取消次数</th><th>过号次数</th><th>临时预约</th><th>取消率</th></tr></thead>
+          <thead><tr><th>单位</th><th>单位类型</th><th>预约次数</th><th>正常闭环</th><th>异常闭环</th><th>未到现场</th><th>取消次数</th><th>临时预约</th></tr></thead>
           <tbody>
             ${stats.byUnit.map((row) => `
               <tr>
                 <td>${row.unitName}</td>
                 <td>${row.unitType}</td>
                 <td>${row.total}</td>
+                <td>${row.normalClosed}</td>
+                <td>${row.exceptionClosed}</td>
+                <td>${row.noShowClosed}</td>
                 <td>${row.cancelled}</td>
-                <td>${row.noShow}</td>
                 <td>${row.temporary}</td>
-                <td>${row.total ? Math.round((row.cancelled / row.total) * 100) : 0}%</td>
               </tr>
             `).join("")}
           </tbody>
@@ -687,7 +747,7 @@ function renderUserHero() {
       <div>
         <p class="hero-kicker">仓库承载预约</p>
         <h2>预约前置管控</h2>
-        <p>按需求 TAB 管控下周号段、取消窗口、过号记录和临时预约。</p>
+        <p>按三类号段容量管控预约，并追踪每一笔预约的正常、异常或未到闭环。</p>
       </div>
     </section>
   `;
@@ -715,6 +775,10 @@ function renderRuleCards() {
   return `
     <section class="section rule-grid">
       <article class="rule-card">
+        <strong>三类号段容量</strong>
+        <span>供应商、承运商、领料单位分别放号，可使用固定配额或共享总容量。</span>
+      </article>
+      <article class="rule-card">
         <strong>本周预约下周</strong>
         <span>普通预约入口只开放下周已审核通过号段，其他日期不进入可选清单。</span>
       </article>
@@ -723,12 +787,8 @@ function renderRuleCards() {
         <span>仅预约号段前一自然日可取消；取消会释放容量并累计单位/账号取消次数。</span>
       </article>
       <article class="rule-card">
-        <strong>过号进入考核</strong>
-        <span>仓库管理员标记过号后通知联系人，并累计过号次数，达到阈值后当月禁约。</span>
-      </article>
-      <article class="rule-card">
-        <strong>临时号段先审核</strong>
-        <span>仓库创建临时号段并说明原因，中心审核通过后用户才能办理临时预约。</span>
+        <strong>履约必须闭环</strong>
+        <span>原号段未到可申请同日调整；调整后到场记异常闭环，最终未到则自动闭环并进入考核。</span>
       </article>
     </section>
   `;
@@ -743,7 +803,7 @@ function slotCards(slots, action) {
           <h3>${slot.date} ${slot.start}-${slot.end}</h3>
           <div class="meta">
             <span>${slot.stationName} · ${slot.warehouseName}</span>
-            <span>${slot.workFaceName} · ${slot.typeName}</span>
+            <span>${slot.workFaceName} · ${slot.audienceTypeName}号</span>
             <span>容量 ${slot.capacity}，已约 ${slot.booked}，剩余 ${slot.remaining}</span>
             <span>${slot.kind === "temporary" ? tag("临时号段", "warning") : tag("普通号段", "info")} ${statusTag(slot.status)}</span>
           </div>
@@ -768,7 +828,8 @@ function bookingCards(bookings, allowCancel) {
               <span>${booking.date} ${booking.start}-${booking.end}</span>
               <span>${booking.warehouseName} · ${booking.workFaceName}</span>
               <span>${booking.typeName} · ${booking.companyName}</span>
-              <span>${statusTag(booking.status)} ${booking.slotKind === "temporary" ? tag("临时预约", "warning") : ""}</span>
+              <span>${booking.audienceTypeName}号 · ${statusTag(booking.status)} ${booking.slotKind === "temporary" ? tag("临时预约", "warning") : ""}</span>
+              <span>${closureResultTag(booking)}</span>
               <span>${cancel.ok ? "可取消" : cancel.reason}</span>
             </div>
             <div class="actions">
@@ -782,11 +843,53 @@ function bookingCards(bookings, allowCancel) {
   `;
 }
 
+function adjustmentRequestCard(booking) {
+  const targets = api.listAdjustmentTargets(booking.id);
+  return `
+    <article class="item-card">
+      <h3>${booking.id}</h3>
+      <div class="meta">
+        <span>原号段：${booking.date} ${booking.start}-${booking.end}</span>
+        <span>${booking.companyName} · ${booking.audienceTypeName}号</span>
+        <span>${booking.typeName} · ${booking.warehouseName}</span>
+      </div>
+      ${targets.length ? `
+        <form data-form="adjustment">
+          <input type="hidden" name="bookingId" value="${booking.id}" />
+          <label class="field"><span>调整至</span><select class="input" name="targetSelectionId">${targets.map((slot) => `<option value="${slot.id}">${slot.start}-${slot.end} · ${slot.workFaceName} · 剩余 ${slot.remaining}</option>`).join("")}</select></label>
+          <label class="field" style="margin-top:10px"><span>调整原因</span><textarea class="input" name="reason">原号段未到，申请同日后续号段</textarea></label>
+          <div class="actions" style="margin-top:12px"><button class="btn btn-primary" type="submit">发起调整审批</button><button class="btn btn-warning" type="button" data-action="no-show-booking" data-booking-id="${booking.id}">未到闭环</button></div>
+        </form>
+      ` : `<div class="notice danger">当日没有同类别可用后续号段，只能按未到现场闭环。</div><button class="btn btn-warning" data-action="no-show-booking" data-booking-id="${booking.id}">未到闭环</button>`}
+    </article>
+  `;
+}
+
+function adjustmentTable(adjustments) {
+  if (!adjustments.length) return empty("暂无待审批履约调整");
+  return `
+    <table>
+      <thead><tr><th>调整单</th><th>预约/单位</th><th>原号段</th><th>目标号段</th><th>号段类别</th><th>原因</th><th>操作</th></tr></thead>
+      <tbody>${adjustments.map((item) => `
+        <tr>
+          <td>${item.id}<br>${tag("待中心审批", "info")}</td>
+          <td>${item.booking.id}<br>${item.booking.companyName}</td>
+          <td>${item.booking.date}<br>${item.booking.start}-${item.booking.end}</td>
+          <td>${item.targetSlot.date}<br>${item.targetSlot.start}-${item.targetSlot.end}</td>
+          <td>${item.audienceTypeName}</td>
+          <td>${escapeHtml(item.reason)}</td>
+          <td><div class="row-actions"><button class="btn btn-small btn-primary" data-action="approve-adjustment" data-adjustment-id="${item.id}">通过</button><button class="btn btn-small btn-danger" data-action="reject-adjustment" data-adjustment-id="${item.id}">驳回</button></div></td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+  `;
+}
+
 function slotTable(slots, actions = false) {
   if (!slots.length) return empty("暂无号段");
   return `
     <table>
-      <thead><tr><th>日期</th><th>时间</th><th>仓库</th><th>作业面</th><th>类型</th><th>容量</th><th>状态</th><th>操作</th></tr></thead>
+      <thead><tr><th>日期</th><th>时间</th><th>仓库</th><th>作业面</th><th>供应商号</th><th>承运商号</th><th>领料单位号</th><th>容量模式</th><th>状态</th><th>操作</th></tr></thead>
       <tbody>
         ${slots.map((slot) => `
           <tr>
@@ -794,8 +897,10 @@ function slotTable(slots, actions = false) {
             <td>${slot.start}-${slot.end}</td>
             <td>${slot.warehouseName}</td>
             <td>${slot.workFaceName}</td>
-            <td>${slot.typeName}${slot.kind === "temporary" ? " / 临时" : ""}</td>
-            <td>${slot.booked}/${slot.capacity}${slot.capacityMode === "mixed" ? " · 混合" : ""}</td>
+            <td>${quotaCell(slot, "supplier")}</td>
+            <td>${quotaCell(slot, "carrier")}</td>
+            <td>${quotaCell(slot, "pickupUnit")}</td>
+            <td>${slot.capacityMode === "shared" ? `共享 ${slot.booked}/${slot.capacity}` : "固定配额"}${slot.kind === "temporary" ? " · 临时" : ""}</td>
             <td>${statusTag(slot.status)}</td>
             <td><div class="row-actions">${actions ? slotActions(slot) : ""}</div></td>
           </tr>
@@ -816,20 +921,27 @@ function slotActions(slot) {
   return `<span class="status default">无操作</span>`;
 }
 
+function quotaCell(slot, audienceType) {
+  if (slot.capacityMode === "shared") return `<span class="status info">共享</span>`;
+  const booked = slot.audienceBooked?.[audienceType] || 0;
+  const capacity = slot.audienceCapacities?.[audienceType] || 0;
+  return `${booked}/${capacity}`;
+}
+
 function bookingTable(bookings, mode) {
   if (!bookings.length) return empty("暂无记录");
   return `
     <table>
-      <thead><tr><th>预约编号</th><th>预约时间</th><th>单位/联系人</th><th>类型</th><th>仓库作业面</th><th>状态</th><th>操作</th></tr></thead>
+      <thead><tr><th>预约编号</th><th>预约时间</th><th>单位/联系人</th><th>业务/号段类别</th><th>仓库作业面</th><th>状态/闭环结果</th><th>操作</th></tr></thead>
       <tbody>
         ${bookings.map((booking) => `
           <tr>
             <td>${booking.id}<br><span class="status default">${booking.source === "adminProxy" ? "管理端代约" : "用户提交"}</span></td>
-            <td>${booking.date}<br>${booking.start}-${booking.end}</td>
+            <td>${bookingSchedule(booking)}</td>
             <td>${booking.companyName}<br>${booking.contactName} ${booking.contactPhone}</td>
-            <td>${booking.typeName}<br>${booking.unitTypeName}</td>
+            <td>${booking.typeName}<br>${booking.audienceTypeName}号</td>
             <td>${booking.warehouseName}<br>${booking.workFaceName}</td>
-            <td>${statusTag(booking.status)}</td>
+            <td>${statusTag(booking.status)}<br>${closureResultTag(booking)}</td>
             <td><div class="row-actions">${bookingActions(booking, mode)}</div></td>
           </tr>
         `).join("")}
@@ -866,10 +978,36 @@ function bookingActions(booking, mode) {
       <button class="btn btn-small btn-danger" data-action="reject-booking" data-booking-id="${booking.id}">驳回</button>
     `;
   }
+  if (mode === "closed") return `<span class="status default">已归档</span>`;
+  if ([BookingStatus.APPROVED, BookingStatus.PENDING_COMPLETION].includes(booking.status)) {
+    return `
+      <button class="btn btn-small btn-primary" data-action="complete-booking" data-booking-id="${booking.id}">正常办结</button>
+      <button class="btn btn-small btn-warning" data-action="miss-window" data-booking-id="${booking.id}">原号段未到</button>
+    `;
+  }
+  if (booking.status === BookingStatus.RESCHEDULED) {
+    return `
+      <button class="btn btn-small btn-primary" data-action="complete-booking" data-booking-id="${booking.id}">调整后办结</button>
+      <button class="btn btn-small btn-warning" data-action="no-show-booking" data-booking-id="${booking.id}">未到闭环</button>
+    `;
+  }
   return `
-    <button class="btn btn-small btn-primary" data-action="complete-booking" data-booking-id="${booking.id}">完结</button>
-    <button class="btn btn-small btn-warning" data-action="no-show-booking" data-booking-id="${booking.id}">过号</button>
+    <button class="btn btn-small btn-warning" data-action="no-show-booking" data-booking-id="${booking.id}">未到闭环</button>
   `;
+}
+
+function bookingSchedule(booking) {
+  if (booking.adjustedSchedule) {
+    return `原：${booking.date} ${booking.start}-${booking.end}<br><strong>调整：${booking.adjustedSchedule.date} ${booking.adjustedSchedule.start}-${booking.adjustedSchedule.end}</strong>`;
+  }
+  return `${booking.date}<br>${booking.start}-${booking.end}`;
+}
+
+function closureResultTag(booking) {
+  if (booking.closureType === "normal") return tag("正常闭环", "success");
+  if (booking.closureType === "exception") return tag("异常闭环", "warning");
+  if (booking.arrivalStatus === "notArrived") return tag(booking.closureMethod === "auto" ? "自动闭环·未到" : "未到现场", "danger");
+  return tag("未闭环", "default");
 }
 
 function slotForm(kind) {
@@ -879,12 +1017,14 @@ function slotForm(kind) {
       <div class="form-grid">
         <label class="field"><span>仓库</span><select class="input" name="warehouseId">${api.state.warehouses.map((warehouse) => `<option value="${warehouse.id}">${warehouse.name}</option>`).join("")}</select></label>
         <label class="field"><span>作业面</span><select class="input" name="workFaceId">${api.state.workFaces.map((face) => `<option value="${face.id}">${face.name}</option>`).join("")}</select></label>
-        <label class="field"><span>预约类型</span><select class="input" name="typeCode">${api.state.appointmentTypes.map((type) => `<option value="${type.code}">${type.name}</option>`).join("")}</select></label>
         <label class="field"><span>日期</span><input class="input" name="date" type="date" value="${kind === "temporary" ? "2026-08-01" : "2026-08-06"}" /></label>
         <label class="field"><span>开始时间</span><input class="input" name="start" value="08:30" /></label>
         <label class="field"><span>结束时间</span><input class="input" name="end" value="09:30" /></label>
-        <label class="field"><span>容量</span><input class="input" name="capacity" type="number" min="1" value="2" /></label>
-        <label class="field"><span>容量模式</span><select class="input" name="capacityMode"><option value="single">单类型</option><option value="mixed">混合模式</option></select></label>
+        <label class="field"><span>容量模式</span><select class="input" name="capacityMode"><option value="fixed">三类固定配额</option><option value="shared">三类共享总量</option></select></label>
+        <label class="field"><span>共享总容量</span><input class="input" name="capacity" type="number" min="1" value="6" /></label>
+        <label class="field"><span>供应商号数量</span><input class="input" name="supplierCapacity" type="number" min="0" value="3" /></label>
+        <label class="field"><span>承运商号数量</span><input class="input" name="carrierCapacity" type="number" min="0" value="2" /></label>
+        <label class="field"><span>领料单位号数量</span><input class="input" name="pickupUnitCapacity" type="number" min="0" value="1" /></label>
       </div>
       ${kind === "temporary" ? `<label class="field" style="margin-top:12px"><span>临时原因</span><textarea class="input" name="reason">临时配送或紧急调配需要</textarea></label>` : ""}
       <div class="toolbar" style="margin-top:16px">
@@ -908,6 +1048,14 @@ function submitBooking(form) {
   }
   showToast("预约已提交，等待仓库管理员审核");
   navigate(data.source === "adminProxy" ? "admin" : "user", data.source === "adminProxy" ? "booking-review" : "my-bookings");
+}
+
+function submitAdjustment(form) {
+  const data = Object.fromEntries(new FormData(form).entries());
+  doAction(
+    () => api.requestAdjustment(data.bookingId, data.targetSelectionId, data.reason, "张建国"),
+    "履约调整已提交中心管理员审批"
+  );
 }
 
 function submitConfig(form) {
@@ -957,9 +1105,13 @@ function statusTag(status) {
     submitted: "info",
     cancelled: "default",
     pendingCompletion: "warning",
+    missedWindow: "warning",
+    adjustmentPending: "info",
+    rescheduled: "info",
     completed: "success",
     noShow: "danger",
-    autoCompleted: "success"
+    autoNoShow: "danger",
+    autoCompleted: "danger"
   }[status] || "default";
   return tag(statusLabel(status), cls);
 }

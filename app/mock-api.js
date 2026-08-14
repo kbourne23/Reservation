@@ -1,7 +1,9 @@
 import {
+  AudienceType,
   BookingStatus,
   SlotStatus,
   addHistory,
+  audienceTypeForUnit,
   canCancelBooking,
   getRestriction,
   isBookNextWeek,
@@ -45,6 +47,16 @@ export function createInitialState() {
         noShowCount: 0
       },
       {
+        id: "user-pickup-1",
+        name: "王磊",
+        role: "external",
+        unitType: "construction",
+        unitName: "长沙电建施工一队",
+        phone: "13500007890",
+        cancelCount: 0,
+        noShowCount: 0
+      },
+      {
         id: "admin-warehouse-1",
         name: "张建国",
         role: "warehouseAdmin",
@@ -81,10 +93,10 @@ export function createInitialState() {
       { id: "wf-yl-1", warehouseId: "wh-yl", name: "岳麓1号作业面", status: "enabled", description: "通用作业面" }
     ],
     appointmentTypes: [
-      { code: "SUPPLIER_DELIVERY", name: "供应商到货", unitTypes: ["supplier", "carrier"], enabled: true },
-      { code: "TRANSFER_OUT", name: "调配出库", unitTypes: ["warehouse", "carrier"], enabled: true },
-      { code: "TRANSFER_IN", name: "调配入库", unitTypes: ["warehouse", "carrier"], enabled: true },
-      { code: "CONSTRUCT_PICKUP", name: "施工领料", unitTypes: ["construction"], enabled: true }
+      { code: "SUPPLIER_DELIVERY", name: "供应商到货", audienceTypes: [AudienceType.SUPPLIER, AudienceType.CARRIER], enabled: true },
+      { code: "TRANSFER_OUT", name: "调配出库", audienceTypes: [AudienceType.CARRIER], enabled: true },
+      { code: "TRANSFER_IN", name: "调配入库", audienceTypes: [AudienceType.CARRIER], enabled: true },
+      { code: "CONSTRUCT_PICKUP", name: "施工领料", audienceTypes: [AudienceType.PICKUP_UNIT], enabled: true }
     ],
     slots: [
       {
@@ -93,13 +105,14 @@ export function createInitialState() {
         status: SlotStatus.BOOKABLE,
         warehouseId: "wh-xs",
         workFaceId: "wf-xs-1",
-        typeCode: "SUPPLIER_DELIVERY",
         date: "2026-08-03",
         start: "08:30",
         end: "09:30",
-        capacity: 4,
-        booked: 1,
-        capacityMode: "single",
+        capacity: 6,
+        booked: 2,
+        capacityMode: "fixed",
+        audienceCapacities: { supplier: 3, carrier: 2, pickupUnit: 1 },
+        audienceBooked: { supplier: 2, carrier: 0, pickupUnit: 0 },
         history: [{ action: "approve", actor: "李明辉", note: "中心审核通过", at: "2026-07-31T08:10:00.000Z" }]
       },
       {
@@ -108,14 +121,31 @@ export function createInitialState() {
         status: SlotStatus.BOOKABLE,
         warehouseId: "wh-xs",
         workFaceId: "wf-xs-2",
-        typeCode: "CONSTRUCT_PICKUP",
         date: "2026-08-03",
         start: "09:30",
         end: "10:30",
-        capacity: 3,
+        capacity: 6,
         booked: 0,
-        capacityMode: "single",
+        capacityMode: "fixed",
+        audienceCapacities: { supplier: 2, carrier: 1, pickupUnit: 3 },
+        audienceBooked: { supplier: 0, carrier: 0, pickupUnit: 0 },
         history: []
+      },
+      {
+        id: "slot-0803-1430",
+        kind: "normal",
+        status: SlotStatus.BOOKABLE,
+        warehouseId: "wh-xs",
+        workFaceId: "wf-xs-1",
+        date: "2026-08-03",
+        start: "14:30",
+        end: "15:30",
+        capacity: 5,
+        booked: 0,
+        capacityMode: "fixed",
+        audienceCapacities: { supplier: 2, carrier: 2, pickupUnit: 1 },
+        audienceBooked: { supplier: 0, carrier: 0, pickupUnit: 0 },
+        history: [{ action: "approve", actor: "李明辉", note: "中心审核通过", at: "2026-07-31T08:20:00.000Z" }]
       },
       {
         id: "slot-0804-1030",
@@ -123,14 +153,14 @@ export function createInitialState() {
         status: SlotStatus.PENDING_REVIEW,
         warehouseId: "wh-xs",
         workFaceId: "wf-xs-3",
-        typeCode: "TRANSFER_IN",
         date: "2026-08-04",
         start: "10:30",
         end: "11:30",
         capacity: 2,
         booked: 0,
-        capacityMode: "mixed",
-        typeCapacities: { TRANSFER_IN: 1, TRANSFER_OUT: 1 },
+        capacityMode: "shared",
+        audienceCapacities: { supplier: 2, carrier: 2, pickupUnit: 2 },
+        audienceBooked: { supplier: 0, carrier: 0, pickupUnit: 0 },
         history: [{ action: "submit", actor: "张建国", note: "提交中心审核", at: "2026-07-31T02:00:00.000Z" }]
       },
       {
@@ -139,13 +169,14 @@ export function createInitialState() {
         status: SlotStatus.DRAFT,
         warehouseId: "wh-xs",
         workFaceId: "wf-xs-1",
-        typeCode: "SUPPLIER_DELIVERY",
         date: "2026-08-05",
         start: "14:30",
         end: "15:30",
         capacity: 4,
         booked: 0,
-        capacityMode: "single",
+        capacityMode: "fixed",
+        audienceCapacities: { supplier: 2, carrier: 1, pickupUnit: 1 },
+        audienceBooked: { supplier: 0, carrier: 0, pickupUnit: 0 },
         history: []
       },
       {
@@ -154,14 +185,15 @@ export function createInitialState() {
         status: SlotStatus.BOOKABLE,
         warehouseId: "wh-xs",
         workFaceId: "wf-xs-2",
-        typeCode: "TRANSFER_OUT",
         date: "2026-08-01",
         start: "15:30",
         end: "16:30",
         capacity: 1,
         booked: 0,
         reason: "紧急调配出库",
-        capacityMode: "single",
+        capacityMode: "fixed",
+        audienceCapacities: { supplier: 0, carrier: 1, pickupUnit: 0 },
+        audienceBooked: { supplier: 0, carrier: 0, pickupUnit: 0 },
         history: [{ action: "approve", actor: "李明辉", note: "临时号段审核通过", at: "2026-07-31T04:00:00.000Z" }]
       }
     ],
@@ -169,10 +201,14 @@ export function createInitialState() {
       {
         id: "apt-20260731-001",
         slotId: "slot-0803-0830",
+        currentSlotId: "slot-0803-0830",
         status: BookingStatus.SUBMITTED,
+        processStatus: "open",
+        arrivalStatus: "pending",
         source: "user",
         requesterUserId: "user-supplier-1",
         unitType: "supplier",
+        audienceType: AudienceType.SUPPLIER,
         companyName: "衡阳电缆有限公司",
         contactName: "陈伟",
         contactPhone: "13800001234",
@@ -187,10 +223,14 @@ export function createInitialState() {
       {
         id: "apt-20260731-002",
         slotId: "temp-0731-1530",
+        currentSlotId: "temp-0731-1530",
         status: BookingStatus.APPROVED,
+        processStatus: "open",
+        arrivalStatus: "pending",
         source: "adminProxy",
         requesterUserId: "admin-warehouse-1",
         unitType: "warehouse",
+        audienceType: AudienceType.CARRIER,
         companyName: "湘潭中心站-岳塘仓库",
         contactName: "周明",
         contactPhone: "13600009012",
@@ -201,8 +241,34 @@ export function createInitialState() {
         start: "15:30",
         end: "16:30",
         history: [{ action: "approve", actor: "张建国", note: "仓库审核通过", at: "2026-07-31T05:15:00.000Z" }]
+      },
+      {
+        id: "apt-20260731-003",
+        slotId: "slot-0803-0830",
+        currentSlotId: "slot-0803-0830",
+        status: BookingStatus.MISSED_WINDOW,
+        processStatus: "open",
+        arrivalStatus: "missedOriginalWindow",
+        source: "user",
+        requesterUserId: "user-supplier-1",
+        unitType: "supplier",
+        audienceType: AudienceType.SUPPLIER,
+        companyName: "衡阳电缆有限公司",
+        contactName: "陈伟",
+        contactPhone: "13800001234",
+        typeCode: "SUPPLIER_DELIVERY",
+        warehouseId: "wh-xs",
+        workFaceId: "wf-xs-1",
+        date: "2026-08-03",
+        start: "08:30",
+        end: "09:30",
+        history: [
+          { action: "approve", actor: "张建国", note: "仓库审核通过", at: "2026-08-02T05:15:00.000Z" },
+          { action: "missWindow", actor: "张建国", note: "原号段未到现场", at: "2026-08-03T01:31:00.000Z" }
+        ]
       }
     ],
+    adjustments: [],
     messages: [],
     logs: [],
     operationRecords: [
@@ -265,13 +331,14 @@ export function createApi(state, persist = () => {}) {
       return getRestriction(user || {}, api.state.config);
     },
 
-    listBookableSlots({ includeTemporary = false } = {}) {
+    listBookableSlots({ includeTemporary = false, audienceType = null } = {}) {
       return api.state.slots
         .filter((slot) => slot.status === SlotStatus.BOOKABLE)
         .filter((slot) => includeTemporary || slot.kind === "normal")
         .filter((slot) => includeTemporary || isBookNextWeek(slot.date, new Date("2026-07-31T10:00:00")))
-        .filter((slot) => slot.booked < slot.capacity)
-        .map((slot) => enrichSlot(api.state, slot));
+        .flatMap((slot) => expandSlotOfferings(api.state, slot))
+        .filter((slot) => !audienceType || slot.audienceType === audienceType)
+        .filter((slot) => slot.remaining > 0);
     },
 
     listSlots(filter = {}) {
@@ -283,19 +350,29 @@ export function createApi(state, persist = () => {}) {
 
     createSlot(input, actor = ACTOR) {
       const id = `${input.kind === "temporary" ? "temp" : "slot"}-${Date.now()}`;
+      const capacityMode = input.capacityMode || "fixed";
+      const audienceCapacities = {
+        supplier: Number(input.supplierCapacity || 0),
+        carrier: Number(input.carrierCapacity || 0),
+        pickupUnit: Number(input.pickupUnitCapacity || 0)
+      };
+      const configuredTotal = Object.values(audienceCapacities).reduce((sum, value) => sum + value, 0);
+      const capacity = capacityMode === "shared" ? Number(input.capacity || configuredTotal || 1) : configuredTotal;
+      if (capacity < 1) throw new Error("至少需要配置一类号段容量");
       const slot = {
         id,
         kind: input.kind || "normal",
         status: SlotStatus.DRAFT,
         warehouseId: input.warehouseId,
         workFaceId: input.workFaceId,
-        typeCode: input.typeCode,
         date: input.date,
         start: input.start,
         end: input.end,
-        capacity: Number(input.capacity || 1),
+        capacity,
         booked: 0,
-        capacityMode: input.capacityMode || "single",
+        capacityMode,
+        audienceCapacities,
+        audienceBooked: { supplier: 0, carrier: 0, pickupUnit: 0 },
         reason: input.reason || "",
         history: []
       };
@@ -364,6 +441,7 @@ export function createApi(state, persist = () => {}) {
         id: `slot-copy-${Date.now()}-${slot.id}`,
         date: addDays(slot.date, 7),
         booked: 0,
+        audienceBooked: { supplier: 0, carrier: 0, pickupUnit: 0 },
         history: [
           ...(slot.history || []),
           { action: "copy", actor, note: "上周未修改，复制到下一周并免审", at: new Date().toISOString() }
@@ -381,9 +459,18 @@ export function createApi(state, persist = () => {}) {
       if (restriction.status === "monthlyRestricted") {
         errors.push(restriction.reason);
       }
-      const slot = findById(api.state.slots, input.slotId);
+      const selection = parseSlotSelection(input.slotId, input.audienceType);
+      const slot = api.state.slots.find((item) => item.id === selection.slotId);
+      const audienceType = selection.audienceType || audienceTypeForUnit(input.unitType || user.unitType);
+      const appointmentType = api.state.appointmentTypes.find((item) => item.code === input.typeCode);
       if (!slot || slot.status !== SlotStatus.BOOKABLE) errors.push("号段不可预约");
-      if (slot && slot.booked >= slot.capacity) errors.push("号段容量已满");
+      if (!audienceType) errors.push("无法确定号段类别");
+      if (slot && audienceType && getRemainingCapacity(slot, audienceType) < 1) errors.push("该类号段容量已满");
+      if (appointmentType && audienceType && !appointmentType.audienceTypes.includes(audienceType)) {
+        errors.push(`${appointmentType.name}不适用于${audienceTypeLabel(audienceType)}号段`);
+      }
+      const expectedAudience = audienceTypeForUnit(input.unitType || user.unitType);
+      if (expectedAudience && expectedAudience !== audienceType) errors.push("所选号段类别与单位类型不匹配");
       if (slot?.kind !== "temporary" && slot && !isBookNextWeek(slot.date, new Date("2026-07-31T10:00:00"))) {
         errors.push("只支持本周预约下周号段");
       }
@@ -392,10 +479,14 @@ export function createApi(state, persist = () => {}) {
       const booking = {
         id: `apt-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${String(api.state.bookings.length + 1).padStart(3, "0")}`,
         slotId: slot.id,
+        currentSlotId: slot.id,
         status: BookingStatus.SUBMITTED,
+        processStatus: "open",
+        arrivalStatus: "pending",
         source: input.source || "user",
         requesterUserId: user.id,
         unitType: input.unitType || user.unitType,
+        audienceType,
         companyName: input.companyName.trim(),
         contactName: input.contactName.trim(),
         contactPhone: input.contactPhone.trim(),
@@ -407,7 +498,7 @@ export function createApi(state, persist = () => {}) {
         end: slot.end,
         history: []
       };
-      slot.booked += 1;
+      reserveSlotCapacity(slot, audienceType);
       api.state.bookings.unshift(addHistory(booking, "submit", actorName || user.name, "提交预约申请"));
       pushMessage(api.state, "warehouseAdmin", "预约待审核", `${booking.companyName} 提交 ${displayType(api.state, booking.typeCode)} 预约`);
       recordOperation(api.state, {
@@ -450,7 +541,7 @@ export function createApi(state, persist = () => {}) {
     rejectBooking(bookingId, reason, actor = ACTOR) {
       const booking = findById(api.state.bookings, bookingId);
       replaceById(api.state.bookings, bookingId, transitionBooking(booking, "reject", actor, reason || "预约信息不完整"));
-      releaseSlot(api.state, booking.slotId);
+      releaseSlot(api.state, booking.slotId, booking.audienceType);
       pushMessage(api.state, booking.requesterUserId, "预约被驳回", reason || "请修改后重新提交");
       recordOperation(api.state, {
         businessType: "booking",
@@ -470,7 +561,7 @@ export function createApi(state, persist = () => {}) {
       const allowed = canCancelBooking(booking, new Date("2026-07-31T10:00:00"));
       if (!allowed.ok) return { ok: false, errors: [allowed.reason] };
       replaceById(api.state.bookings, bookingId, transitionBooking(booking, "cancel", actor, reason || "用户取消预约"));
-      releaseSlot(api.state, booking.slotId);
+      releaseSlot(api.state, booking.slotId, booking.audienceType);
       const user = findById(api.state.users, booking.requesterUserId);
       if (user) user.cancelCount = (user.cancelCount || 0) + 1;
       recordOperation(api.state, {
@@ -498,25 +589,140 @@ export function createApi(state, persist = () => {}) {
 
     completeBooking(bookingId, actor = ACTOR) {
       const booking = ensurePendingCompletion(api.state, bookingId);
-      replaceById(api.state.bookings, bookingId, transitionBooking(booking, "complete", actor, "仓库管理员标记完结"));
+      const isException = booking.status === BookingStatus.RESCHEDULED;
+      const next = closeBooking(
+        transitionBooking(booking, "complete", actor, isException ? "调整后到场并办结" : "原号段到场并办结"),
+        {
+          arrivalStatus: isException ? "rescheduledArrived" : "onTime",
+          closureType: isException ? "exception" : "normal",
+          closureMethod: "manual"
+        }
+      );
+      replaceById(api.state.bookings, bookingId, next);
       recordOperation(api.state, {
         businessType: "booking",
         businessId: booking.id,
         unitName: booking.companyName,
         unitType: booking.unitType,
         operator: actor,
-        action: "预约完结",
-        result: "已完结",
-        reason: "仓库管理员确认履约完成"
+        action: isException ? "异常履约办结" : "正常履约办结",
+        result: isException ? "异常闭环" : "正常闭环",
+        reason: isException ? "经审批调整后到场" : "原号段按时到场"
       });
+      persist(api.state);
+    },
+
+    markMissedWindow(bookingId, actor = ACTOR) {
+      const booking = ensurePendingCompletion(api.state, bookingId);
+      if (booking.status !== BookingStatus.PENDING_COMPLETION) throw new Error("当前预约不能标记原号段未到");
+      const next = transitionBooking(booking, "missWindow", actor, "原号段结束时未到现场");
+      replaceById(api.state.bookings, bookingId, { ...next, arrivalStatus: "missedOriginalWindow" });
+      recordOperation(api.state, {
+        businessType: "booking",
+        businessId: booking.id,
+        unitName: booking.companyName,
+        unitType: booking.unitType,
+        operator: actor,
+        action: "标记原号段未到",
+        result: "等待异常处置",
+        reason: "原号段结束时未到现场"
+      });
+      persist(api.state);
+    },
+
+    listAdjustmentTargets(bookingId) {
+      const booking = findById(api.state.bookings, bookingId);
+      return api.state.slots
+        .filter((slot) => slot.status === SlotStatus.BOOKABLE)
+        .filter((slot) => slot.warehouseId === booking.warehouseId && slot.date === booking.date)
+        .filter((slot) => slot.start > booking.start)
+        .flatMap((slot) => expandSlotOfferings(api.state, slot))
+        .filter((slot) => slot.audienceType === booking.audienceType && slot.remaining > 0);
+    },
+
+    requestAdjustment(bookingId, targetSelectionId, reason, actor = ACTOR) {
+      const booking = findById(api.state.bookings, bookingId);
+      if (booking.status !== BookingStatus.MISSED_WINDOW) throw new Error("只有原号段未到的预约可以发起调整");
+      const target = api.listAdjustmentTargets(bookingId).find((slot) => slot.id === targetSelectionId);
+      if (!target) throw new Error("目标号段不可用或容量已满");
+      const adjustment = {
+        id: `adj-${Date.now()}-${api.state.adjustments.length + 1}`,
+        bookingId,
+        fromSlotId: booking.currentSlotId || booking.slotId,
+        targetSlotId: target.slotPlanId,
+        audienceType: booking.audienceType,
+        status: "pendingReview",
+        reason: reason || "原号段未到，申请同日调整",
+        requestedBy: actor,
+        requestedAt: new Date().toISOString(),
+        history: []
+      };
+      api.state.adjustments.unshift(adjustment);
+      replaceById(api.state.bookings, bookingId, transitionBooking(booking, "requestAdjustment", actor, adjustment.reason));
+      pushMessage(api.state, "centerAdmin", "履约调整待审批", `${booking.id} 申请调整至 ${target.start}-${target.end}`);
+      recordOperation(api.state, {
+        businessType: "adjustment",
+        businessId: adjustment.id,
+        unitName: booking.companyName,
+        unitType: booking.unitType,
+        operator: actor,
+        action: "发起履约调整",
+        result: "待中心审批",
+        reason: adjustment.reason
+      });
+      persist(api.state);
+      return adjustment;
+    },
+
+    listAdjustments(filter = {}) {
+      return api.state.adjustments
+        .filter((item) => !filter.status || item.status === filter.status)
+        .map((item) => enrichAdjustment(api.state, item));
+    },
+
+    approveAdjustment(adjustmentId, actor = ACTOR) {
+      const adjustment = findById(api.state.adjustments, adjustmentId);
+      if (adjustment.status !== "pendingReview") throw new Error("该调整单已处理");
+      const booking = findById(api.state.bookings, adjustment.bookingId);
+      if (booking.status !== BookingStatus.ADJUSTMENT_PENDING) throw new Error("预约状态与调整单不一致");
+      const targetSlot = findById(api.state.slots, adjustment.targetSlotId);
+      if (getRemainingCapacity(targetSlot, adjustment.audienceType) < 1) throw new Error("目标号段容量已满，请重新选择");
+      reserveSlotCapacity(targetSlot, adjustment.audienceType);
+      const next = transitionBooking(booking, "approveAdjustment", actor, "中心管理员批准同日调整");
+      replaceById(api.state.bookings, booking.id, {
+        ...next,
+        currentSlotId: targetSlot.id,
+        adjustedSchedule: { date: targetSlot.date, start: targetSlot.start, end: targetSlot.end, workFaceId: targetSlot.workFaceId },
+        arrivalStatus: "awaitingRescheduledArrival"
+      });
+      Object.assign(adjustment, { status: "approved", reviewedBy: actor, reviewedAt: new Date().toISOString() });
+      pushMessage(api.state, booking.requesterUserId, "履约调整已通过", `${booking.date} 调整至 ${targetSlot.start}-${targetSlot.end}`);
+      recordOperation(api.state, {
+        businessType: "adjustment",
+        businessId: adjustment.id,
+        unitName: booking.companyName,
+        unitType: booking.unitType,
+        operator: actor,
+        action: "履约调整审批通过",
+        result: "等待调整后到场",
+        reason: `${targetSlot.date} ${targetSlot.start}-${targetSlot.end}`
+      });
+      persist(api.state);
+    },
+
+    rejectAdjustment(adjustmentId, reason, actor = ACTOR) {
+      const adjustment = findById(api.state.adjustments, adjustmentId);
+      if (adjustment.status !== "pendingReview") throw new Error("该调整单已处理");
+      const booking = findById(api.state.bookings, adjustment.bookingId);
+      replaceById(api.state.bookings, booking.id, transitionBooking(booking, "rejectAdjustment", actor, reason || "调整申请被驳回"));
+      Object.assign(adjustment, { status: "rejected", reviewReason: reason || "调整申请被驳回", reviewedBy: actor, reviewedAt: new Date().toISOString() });
+      pushMessage(api.state, booking.requesterUserId, "履约调整被驳回", adjustment.reviewReason);
       persist(api.state);
     },
 
     noShowBooking(bookingId, reason, actor = ACTOR) {
       const booking = ensurePendingCompletion(api.state, bookingId);
-      replaceById(api.state.bookings, bookingId, transitionBooking(booking, "noShow", actor, reason || "预约过号"));
-      const user = findById(api.state.users, booking.requesterUserId);
-      if (user) user.noShowCount = (user.noShowCount || 0) + 1;
+      closeAsNoShow(api.state, booking, "noShow", "manual", reason || "当日未到现场", actor);
       pushMessage(api.state, booking.requesterUserId, "预约过号", `${booking.date} ${booking.start}-${booking.end} 已记录过号`);
       recordOperation(api.state, {
         businessType: "booking",
@@ -525,33 +731,40 @@ export function createApi(state, persist = () => {}) {
         unitType: booking.unitType,
         operator: actor,
         action: "过号处理",
-        result: "已过号并累计过号次数",
+        result: "未到现场并闭环",
         assessmentType: "noShow",
-        reason: reason || "预约过号"
+        reason: reason || "当日未到现场"
       });
       persist(api.state);
     },
 
-    autoCompleteDueBookings() {
+    autoCloseDueBookings(now = new Date()) {
       let count = 0;
       api.state.bookings.forEach((booking) => {
-        if (booking.status === BookingStatus.PENDING_COMPLETION) {
-          replaceById(api.state.bookings, booking.id, transitionBooking(booking, "autoComplete", "system", "每日00:00自动按工单完结"));
+        const openStatuses = [BookingStatus.APPROVED, BookingStatus.PENDING_COMPLETION, BookingStatus.MISSED_WINDOW, BookingStatus.ADJUSTMENT_PENDING, BookingStatus.RESCHEDULED];
+        if (openStatuses.includes(booking.status) && isBeforeDate(booking.date, now)) {
+          const ready = ensurePendingCompletion(api.state, booking.id);
+          closeAsNoShow(api.state, ready, "autoCloseNoShow", "auto", "当日截止仍未到现场，系统自动闭环", "system");
           recordOperation(api.state, {
             businessType: "booking",
             businessId: booking.id,
             unitName: booking.companyName,
             unitType: booking.unitType,
             operator: "system",
-            action: "自动完结",
-            result: "按工单完结",
-            reason: "每日00:00未处理自动完结"
+            action: "系统自动闭环",
+            result: "未到现场",
+            assessmentType: "noShow",
+            reason: "当日截止仍未履约"
           });
           count += 1;
         }
       });
       persist(api.state);
       return count;
+    },
+
+    autoCompleteDueBookings(now = new Date()) {
+      return api.autoCloseDueBookings(now);
     },
 
     updateConfig(input) {
@@ -592,9 +805,13 @@ export function createApi(state, persist = () => {}) {
             total: userBookings.length,
             cancelled: user.cancelCount || 0,
             noShow: user.noShowCount || 0,
-            temporary: userBookings.filter((booking) => getSlot(api.state, booking.slotId)?.kind === "temporary").length
+            temporary: userBookings.filter((booking) => getSlot(api.state, booking.slotId)?.kind === "temporary").length,
+            normalClosed: userBookings.filter((booking) => booking.closureType === "normal").length,
+            exceptionClosed: userBookings.filter((booking) => booking.closureType === "exception").length,
+            noShowClosed: userBookings.filter((booking) => booking.arrivalStatus === "notArrived").length
           };
         });
+      const effectiveBookings = bookings.filter((booking) => ![BookingStatus.SUBMITTED, BookingStatus.REJECTED, BookingStatus.CANCELLED].includes(booking.status));
       return {
         totalBookings: bookings.length,
         pendingBookings: bookings.filter((booking) => booking.status === BookingStatus.SUBMITTED).length,
@@ -602,6 +819,10 @@ export function createApi(state, persist = () => {}) {
         noShowCount: byUnit.reduce((sum, row) => sum + row.noShow, 0),
         cancelCount: byUnit.reduce((sum, row) => sum + row.cancelled, 0),
         temporaryCount: byUnit.reduce((sum, row) => sum + row.temporary, 0),
+        normalClosedCount: effectiveBookings.filter((booking) => booking.closureType === "normal").length,
+        exceptionClosedCount: effectiveBookings.filter((booking) => booking.closureType === "exception").length,
+        noShowClosedCount: effectiveBookings.filter((booking) => booking.arrivalStatus === "notArrived").length,
+        openFulfillmentCount: effectiveBookings.filter((booking) => booking.processStatus !== "closed").length,
         byUnit
       };
     }
@@ -630,14 +851,26 @@ export function statusLabel(status) {
     submitted: "待审核",
     cancelled: "已取消",
     pendingCompletion: "待完结",
+    missedWindow: "原号段未到",
+    adjustmentPending: "调整待审批",
+    rescheduled: "等待调整后到场",
     completed: "已完结",
-    noShow: "已过号",
-    autoCompleted: "自动完结"
+    noShow: "未到现场",
+    autoNoShow: "自动闭环·未到现场",
+    autoCompleted: "自动闭环·未到现场"
   }[status] || status;
 }
 
 export function unitTypeLabel(unitType) {
   return displayUnitType(unitType);
+}
+
+export function audienceTypeLabel(audienceType) {
+  return {
+    supplier: "供应商",
+    carrier: "承运商",
+    pickupUnit: "领料单位"
+  }[audienceType] || audienceType || "-";
 }
 
 function enrichSlot(state, slot) {
@@ -647,21 +880,31 @@ function enrichSlot(state, slot) {
     warehouseName: lookups.warehouses[slot.warehouseId]?.name || "-",
     stationName: lookups.stations[lookups.warehouses[slot.warehouseId]?.stationId]?.name || "-",
     workFaceName: lookups.workFaces[slot.workFaceId]?.name || "-",
-    typeName: lookups.types[slot.typeCode]?.name || "-",
+    audienceSummary: formatAudienceCapacities(slot),
     remaining: Math.max(0, slot.capacity - slot.booked)
   };
 }
 
 function enrichBooking(state, booking) {
   const slot = getSlot(state, booking.slotId);
+  const currentSlot = getSlot(state, booking.currentSlotId || booking.slotId);
   return {
     ...booking,
     slotKind: slot?.kind || "normal",
     warehouseName: buildLookups(state).warehouses[booking.warehouseId]?.name || "-",
     workFaceName: buildLookups(state).workFaces[booking.workFaceId]?.name || "-",
+    currentWorkFaceName: buildLookups(state).workFaces[currentSlot?.workFaceId]?.name || "-",
     typeName: displayType(state, booking.typeCode),
-    unitTypeName: displayUnitType(booking.unitType)
+    unitTypeName: displayUnitType(booking.unitType),
+    audienceTypeName: audienceTypeLabel(booking.audienceType),
+    currentSchedule: currentSlot ? { date: currentSlot.date, start: currentSlot.start, end: currentSlot.end } : null
   };
+}
+
+function enrichAdjustment(state, adjustment) {
+  const booking = enrichBooking(state, findById(state.bookings, adjustment.bookingId));
+  const targetSlot = enrichSlot(state, findById(state.slots, adjustment.targetSlotId));
+  return { ...adjustment, booking, targetSlot, audienceTypeName: audienceTypeLabel(adjustment.audienceType) };
 }
 
 function displayType(state, typeCode) {
@@ -693,9 +936,80 @@ function getSlot(state, slotId) {
   return state.slots.find((slot) => slot.id === slotId);
 }
 
-function releaseSlot(state, slotId) {
+function releaseSlot(state, slotId, audienceType) {
   const slot = getSlot(state, slotId);
-  if (slot) slot.booked = Math.max(0, (slot.booked || 0) - 1);
+  if (!slot) return;
+  slot.booked = Math.max(0, (slot.booked || 0) - 1);
+  if (audienceType && slot.audienceBooked) {
+    slot.audienceBooked[audienceType] = Math.max(0, (slot.audienceBooked[audienceType] || 0) - 1);
+  }
+}
+
+function reserveSlotCapacity(slot, audienceType) {
+  if (getRemainingCapacity(slot, audienceType) < 1) throw new Error("该类号段容量已满");
+  slot.booked = (slot.booked || 0) + 1;
+  slot.audienceBooked ||= { supplier: 0, carrier: 0, pickupUnit: 0 };
+  slot.audienceBooked[audienceType] = (slot.audienceBooked[audienceType] || 0) + 1;
+}
+
+function getRemainingCapacity(slot, audienceType) {
+  if (slot.capacityMode === "shared") return Math.max(0, (slot.capacity || 0) - (slot.booked || 0));
+  const capacity = slot.audienceCapacities?.[audienceType] || 0;
+  const booked = slot.audienceBooked?.[audienceType] || 0;
+  return Math.max(0, capacity - booked);
+}
+
+function expandSlotOfferings(state, slot) {
+  const enriched = enrichSlot(state, slot);
+  return Object.values(AudienceType).map((audienceType) => {
+    const capacity = slot.capacityMode === "shared" ? slot.capacity : slot.audienceCapacities?.[audienceType] || 0;
+    const booked = slot.capacityMode === "shared" ? slot.booked : slot.audienceBooked?.[audienceType] || 0;
+    return {
+      ...enriched,
+      id: `${slot.id}::${audienceType}`,
+      slotPlanId: slot.id,
+      audienceType,
+      audienceTypeName: audienceTypeLabel(audienceType),
+      capacity,
+      booked,
+      remaining: getRemainingCapacity(slot, audienceType)
+    };
+  }).filter((offering) => offering.capacity > 0);
+}
+
+function parseSlotSelection(value, fallbackAudienceType) {
+  const [slotId, audienceType] = String(value || "").split("::");
+  return { slotId, audienceType: audienceType || fallbackAudienceType || null };
+}
+
+function formatAudienceCapacities(slot) {
+  if (slot.capacityMode === "shared") return `共享容量 ${slot.booked || 0}/${slot.capacity || 0}`;
+  return Object.values(AudienceType)
+    .map((type) => `${audienceTypeLabel(type)} ${slot.audienceBooked?.[type] || 0}/${slot.audienceCapacities?.[type] || 0}`)
+    .join(" · ");
+}
+
+function closeBooking(booking, result) {
+  return {
+    ...booking,
+    ...result,
+    processStatus: "closed",
+    closedAt: new Date().toISOString()
+  };
+}
+
+function closeAsNoShow(state, booking, action, method, reason, actor) {
+  const next = closeBooking(transitionBooking(booking, action, actor, reason), {
+    arrivalStatus: "notArrived",
+    closureType: "noShow",
+    closureMethod: method
+  });
+  replaceById(state.bookings, booking.id, next);
+  const user = findById(state.users, booking.requesterUserId);
+  if (user) user.noShowCount = (user.noShowCount || 0) + 1;
+  state.adjustments
+    .filter((item) => item.bookingId === booking.id && item.status === "pendingReview")
+    .forEach((item) => Object.assign(item, { status: "expired", reviewReason: "预约已自动闭环" }));
 }
 
 function pushMessage(state, receiver, title, content) {
@@ -720,6 +1034,12 @@ function recordOperation(state, input) {
 
 function normalizeState(state) {
   const base = createInitialState();
+  const appointmentTypes = (state.appointmentTypes || base.appointmentTypes).map((type) => ({
+    ...type,
+    audienceTypes: type.audienceTypes || inferAudienceTypesForBusiness(type.code)
+  }));
+  const slots = (state.slots || base.slots).map(normalizeSlot);
+  const bookings = (state.bookings || base.bookings).map(normalizeBooking);
   return {
     ...base,
     ...state,
@@ -728,9 +1048,10 @@ function normalizeState(state) {
     stations: state.stations || base.stations,
     warehouses: state.warehouses || base.warehouses,
     workFaces: state.workFaces || base.workFaces,
-    appointmentTypes: state.appointmentTypes || base.appointmentTypes,
-    slots: state.slots || base.slots,
-    bookings: state.bookings || base.bookings,
+    appointmentTypes,
+    slots,
+    bookings,
+    adjustments: state.adjustments || base.adjustments,
     messages: state.messages || base.messages,
     logs: state.logs || base.logs,
     operationRecords: state.operationRecords || base.operationRecords
@@ -751,4 +1072,46 @@ function ensurePendingCompletion(state, bookingId) {
     return next;
   }
   return booking;
+}
+
+function normalizeSlot(slot) {
+  if (slot.audienceCapacities && slot.audienceBooked) return slot;
+  const primaryAudience = inferAudienceTypesForBusiness(slot.typeCode)[0];
+  const audienceCapacities = { supplier: 0, carrier: 0, pickupUnit: 0 };
+  const audienceBooked = { supplier: 0, carrier: 0, pickupUnit: 0 };
+  audienceBooked[primaryAudience] = Number(slot.booked || 0);
+  if (slot.typeCapacities) {
+    Object.entries(slot.typeCapacities).forEach(([typeCode, capacity]) => {
+      const audience = inferAudienceTypesForBusiness(typeCode)[0];
+      audienceCapacities[audience] += Number(capacity || 0);
+    });
+  } else {
+    audienceCapacities[primaryAudience] = Number(slot.capacity || 0);
+  }
+  return { ...slot, capacityMode: "fixed", audienceCapacities, audienceBooked };
+}
+
+function normalizeBooking(booking) {
+  const autoNoShow = booking.status === "autoCompleted";
+  const terminal = [BookingStatus.COMPLETED, BookingStatus.NO_SHOW, BookingStatus.AUTO_NO_SHOW].includes(autoNoShow ? BookingStatus.AUTO_NO_SHOW : booking.status);
+  return {
+    ...booking,
+    status: autoNoShow ? BookingStatus.AUTO_NO_SHOW : booking.status,
+    currentSlotId: booking.currentSlotId || booking.slotId,
+    audienceType: booking.audienceType || audienceTypeForUnit(booking.unitType) || inferAudienceTypesForBusiness(booking.typeCode)[0],
+    processStatus: booking.processStatus || (terminal ? "closed" : "open"),
+    arrivalStatus: booking.arrivalStatus || (autoNoShow || booking.status === BookingStatus.NO_SHOW ? "notArrived" : booking.status === BookingStatus.COMPLETED ? "onTime" : "pending"),
+    closureType: booking.closureType || (autoNoShow || booking.status === BookingStatus.NO_SHOW ? "noShow" : booking.status === BookingStatus.COMPLETED ? "normal" : null),
+    closureMethod: booking.closureMethod || (autoNoShow ? "auto" : terminal ? "manual" : null)
+  };
+}
+
+function inferAudienceTypesForBusiness(typeCode) {
+  if (typeCode === "CONSTRUCT_PICKUP") return [AudienceType.PICKUP_UNIT];
+  if (typeCode === "TRANSFER_OUT" || typeCode === "TRANSFER_IN") return [AudienceType.CARRIER];
+  return [AudienceType.SUPPLIER, AudienceType.CARRIER];
+}
+
+function isBeforeDate(dateText, now) {
+  return new Date(`${dateText}T00:00:00`).getTime() < new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
