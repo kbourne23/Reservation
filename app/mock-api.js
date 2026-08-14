@@ -82,15 +82,9 @@ export function createInitialState() {
       { id: "st-sy", name: "邵阳中心站", adminName: "", phone: "", status: "pendingBind" }
     ],
     warehouses: [
-      { id: "wh-xs", stationId: "st-cs", name: "星沙仓库", code: "CS-XS-001", workFaceLimit: 5, status: "enabled" },
-      { id: "wh-yl", stationId: "st-cs", name: "岳麓仓库", code: "CS-YL-002", workFaceLimit: 4, status: "enabled" },
-      { id: "wh-ty", stationId: "st-zz", name: "天元仓库", code: "ZZ-TY-001", workFaceLimit: 4, status: "enabled" }
-    ],
-    workFaces: [
-      { id: "wf-xs-1", warehouseId: "wh-xs", name: "1号卸货区", status: "enabled", description: "到货卸货、临时堆放" },
-      { id: "wf-xs-2", warehouseId: "wh-xs", name: "2号卸货区", status: "enabled", description: "施工领料交接" },
-      { id: "wf-xs-3", warehouseId: "wh-xs", name: "电缆专用区", status: "enabled", description: "电缆类物资装卸" },
-      { id: "wf-yl-1", warehouseId: "wh-yl", name: "岳麓1号作业面", status: "enabled", description: "通用作业面" }
+      { id: "wh-xs", stationId: "st-cs", name: "星沙仓库", code: "CS-XS-001", status: "enabled" },
+      { id: "wh-yl", stationId: "st-cs", name: "岳麓仓库", code: "CS-YL-002", status: "enabled" },
+      { id: "wh-ty", stationId: "st-zz", name: "天元仓库", code: "ZZ-TY-001", status: "enabled" }
     ],
     appointmentTypes: [
       { code: "SUPPLIER_DELIVERY", name: "供应商到货", audienceTypes: [AudienceType.SUPPLIER, AudienceType.CARRIER], enabled: true },
@@ -104,7 +98,6 @@ export function createInitialState() {
         kind: "normal",
         status: SlotStatus.BOOKABLE,
         warehouseId: "wh-xs",
-        workFaceId: "wf-xs-1",
         date: "2026-08-03",
         start: "08:30",
         end: "09:30",
@@ -120,7 +113,6 @@ export function createInitialState() {
         kind: "normal",
         status: SlotStatus.BOOKABLE,
         warehouseId: "wh-xs",
-        workFaceId: "wf-xs-2",
         date: "2026-08-03",
         start: "09:30",
         end: "10:30",
@@ -136,7 +128,6 @@ export function createInitialState() {
         kind: "normal",
         status: SlotStatus.BOOKABLE,
         warehouseId: "wh-xs",
-        workFaceId: "wf-xs-1",
         date: "2026-08-03",
         start: "14:30",
         end: "15:30",
@@ -152,7 +143,6 @@ export function createInitialState() {
         kind: "normal",
         status: SlotStatus.PENDING_REVIEW,
         warehouseId: "wh-xs",
-        workFaceId: "wf-xs-3",
         date: "2026-08-04",
         start: "10:30",
         end: "11:30",
@@ -168,7 +158,6 @@ export function createInitialState() {
         kind: "normal",
         status: SlotStatus.DRAFT,
         warehouseId: "wh-xs",
-        workFaceId: "wf-xs-1",
         date: "2026-08-05",
         start: "14:30",
         end: "15:30",
@@ -184,7 +173,6 @@ export function createInitialState() {
         kind: "temporary",
         status: SlotStatus.BOOKABLE,
         warehouseId: "wh-xs",
-        workFaceId: "wf-xs-2",
         date: "2026-08-01",
         start: "15:30",
         end: "16:30",
@@ -214,7 +202,6 @@ export function createInitialState() {
         contactPhone: "13800001234",
         typeCode: "SUPPLIER_DELIVERY",
         warehouseId: "wh-xs",
-        workFaceId: "wf-xs-1",
         date: "2026-08-03",
         start: "08:30",
         end: "09:30",
@@ -236,7 +223,6 @@ export function createInitialState() {
         contactPhone: "13600009012",
         typeCode: "TRANSFER_OUT",
         warehouseId: "wh-xs",
-        workFaceId: "wf-xs-2",
         date: "2026-08-01",
         start: "15:30",
         end: "16:30",
@@ -258,7 +244,6 @@ export function createInitialState() {
         contactPhone: "13800001234",
         typeCode: "SUPPLIER_DELIVERY",
         warehouseId: "wh-xs",
-        workFaceId: "wf-xs-1",
         date: "2026-08-03",
         start: "08:30",
         end: "09:30",
@@ -364,7 +349,6 @@ export function createApi(state, persist = () => {}) {
         kind: input.kind || "normal",
         status: SlotStatus.DRAFT,
         warehouseId: input.warehouseId,
-        workFaceId: input.workFaceId,
         date: input.date,
         start: input.start,
         end: input.end,
@@ -454,14 +438,17 @@ export function createApi(state, persist = () => {}) {
 
     submitBooking(input, actorName) {
       const user = api.currentUser();
+      const requester = input.source === "adminProxy"
+        ? api.state.users.find((item) => item.role === "warehouseAdmin") || user
+        : user;
       const errors = validateBookingInput(input);
-      const restriction = getRestriction(user, api.state.config);
+      const restriction = getRestriction(requester, api.state.config);
       if (restriction.status === "monthlyRestricted") {
         errors.push(restriction.reason);
       }
       const selection = parseSlotSelection(input.slotId, input.audienceType);
       const slot = api.state.slots.find((item) => item.id === selection.slotId);
-      const audienceType = selection.audienceType || audienceTypeForUnit(input.unitType || user.unitType);
+      const audienceType = selection.audienceType || audienceTypeForUnit(input.unitType || requester.unitType);
       const appointmentType = api.state.appointmentTypes.find((item) => item.code === input.typeCode);
       if (!slot || slot.status !== SlotStatus.BOOKABLE) errors.push("号段不可预约");
       if (!audienceType) errors.push("无法确定号段类别");
@@ -469,7 +456,7 @@ export function createApi(state, persist = () => {}) {
       if (appointmentType && audienceType && !appointmentType.audienceTypes.includes(audienceType)) {
         errors.push(`${appointmentType.name}不适用于${audienceTypeLabel(audienceType)}号段`);
       }
-      const expectedAudience = audienceTypeForUnit(input.unitType || user.unitType);
+      const expectedAudience = audienceTypeForUnit(input.unitType || requester.unitType);
       if (expectedAudience && expectedAudience !== audienceType) errors.push("所选号段类别与单位类型不匹配");
       if (slot?.kind !== "temporary" && slot && !isBookNextWeek(slot.date, new Date("2026-07-31T10:00:00"))) {
         errors.push("只支持本周预约下周号段");
@@ -484,29 +471,28 @@ export function createApi(state, persist = () => {}) {
         processStatus: "open",
         arrivalStatus: "pending",
         source: input.source || "user",
-        requesterUserId: user.id,
-        unitType: input.unitType || user.unitType,
+        requesterUserId: requester.id,
+        unitType: input.unitType || requester.unitType,
         audienceType,
         companyName: input.companyName.trim(),
         contactName: input.contactName.trim(),
         contactPhone: input.contactPhone.trim(),
         typeCode: input.typeCode,
         warehouseId: slot.warehouseId,
-        workFaceId: slot.workFaceId,
         date: slot.date,
         start: slot.start,
         end: slot.end,
         history: []
       };
       reserveSlotCapacity(slot, audienceType);
-      api.state.bookings.unshift(addHistory(booking, "submit", actorName || user.name, "提交预约申请"));
+      api.state.bookings.unshift(addHistory(booking, "submit", actorName || requester.name, "提交预约申请"));
       pushMessage(api.state, "warehouseAdmin", "预约待审核", `${booking.companyName} 提交 ${displayType(api.state, booking.typeCode)} 预约`);
       recordOperation(api.state, {
         businessType: "booking",
         businessId: booking.id,
         unitName: booking.companyName,
         unitType: booking.unitType,
-        operator: actorName || user.name,
+        operator: actorName || requester.name,
         action: "提交预约",
         result: "待仓库审核",
         reason: `${displayType(api.state, booking.typeCode)} ${booking.date} ${booking.start}-${booking.end}`
@@ -692,7 +678,7 @@ export function createApi(state, persist = () => {}) {
       replaceById(api.state.bookings, booking.id, {
         ...next,
         currentSlotId: targetSlot.id,
-        adjustedSchedule: { date: targetSlot.date, start: targetSlot.start, end: targetSlot.end, workFaceId: targetSlot.workFaceId },
+        adjustedSchedule: { date: targetSlot.date, start: targetSlot.start, end: targetSlot.end },
         arrivalStatus: "awaitingRescheduledArrival"
       });
       Object.assign(adjustment, { status: "approved", reviewedBy: actor, reviewedAt: new Date().toISOString() });
@@ -834,9 +820,8 @@ export function createApi(state, persist = () => {}) {
 export function buildLookups(state) {
   const stations = Object.fromEntries(state.stations.map((item) => [item.id, item]));
   const warehouses = Object.fromEntries(state.warehouses.map((item) => [item.id, item]));
-  const workFaces = Object.fromEntries(state.workFaces.map((item) => [item.id, item]));
   const types = Object.fromEntries(state.appointmentTypes.map((item) => [item.code, item]));
-  return { stations, warehouses, workFaces, types };
+  return { stations, warehouses, types };
 }
 
 export function statusLabel(status) {
@@ -879,7 +864,6 @@ function enrichSlot(state, slot) {
     ...slot,
     warehouseName: lookups.warehouses[slot.warehouseId]?.name || "-",
     stationName: lookups.stations[lookups.warehouses[slot.warehouseId]?.stationId]?.name || "-",
-    workFaceName: lookups.workFaces[slot.workFaceId]?.name || "-",
     audienceSummary: formatAudienceCapacities(slot),
     remaining: Math.max(0, slot.capacity - slot.booked)
   };
@@ -892,8 +876,6 @@ function enrichBooking(state, booking) {
     ...booking,
     slotKind: slot?.kind || "normal",
     warehouseName: buildLookups(state).warehouses[booking.warehouseId]?.name || "-",
-    workFaceName: buildLookups(state).workFaces[booking.workFaceId]?.name || "-",
-    currentWorkFaceName: buildLookups(state).workFaces[currentSlot?.workFaceId]?.name || "-",
     typeName: displayType(state, booking.typeCode),
     unitTypeName: displayUnitType(booking.unitType),
     audienceTypeName: audienceTypeLabel(booking.audienceType),
@@ -1034,6 +1016,8 @@ function recordOperation(state, input) {
 
 function normalizeState(state) {
   const base = createInitialState();
+  const persisted = { ...state };
+  delete persisted.workFaces;
   const appointmentTypes = (state.appointmentTypes || base.appointmentTypes).map((type) => ({
     ...type,
     audienceTypes: type.audienceTypes || inferAudienceTypesForBusiness(type.code)
@@ -1042,12 +1026,11 @@ function normalizeState(state) {
   const bookings = (state.bookings || base.bookings).map(normalizeBooking);
   return {
     ...base,
-    ...state,
+    ...persisted,
     config: { ...base.config, ...(state.config || {}) },
     users: state.users || base.users,
     stations: state.stations || base.stations,
     warehouses: state.warehouses || base.warehouses,
-    workFaces: state.workFaces || base.workFaces,
     appointmentTypes,
     slots,
     bookings,
@@ -1075,34 +1058,42 @@ function ensurePendingCompletion(state, bookingId) {
 }
 
 function normalizeSlot(slot) {
-  if (slot.audienceCapacities && slot.audienceBooked) return slot;
-  const primaryAudience = inferAudienceTypesForBusiness(slot.typeCode)[0];
+  const normalized = { ...slot };
+  delete normalized.workFaceId;
+  if (normalized.audienceCapacities && normalized.audienceBooked) return normalized;
+  const primaryAudience = inferAudienceTypesForBusiness(normalized.typeCode)[0];
   const audienceCapacities = { supplier: 0, carrier: 0, pickupUnit: 0 };
   const audienceBooked = { supplier: 0, carrier: 0, pickupUnit: 0 };
-  audienceBooked[primaryAudience] = Number(slot.booked || 0);
-  if (slot.typeCapacities) {
-    Object.entries(slot.typeCapacities).forEach(([typeCode, capacity]) => {
+  audienceBooked[primaryAudience] = Number(normalized.booked || 0);
+  if (normalized.typeCapacities) {
+    Object.entries(normalized.typeCapacities).forEach(([typeCode, capacity]) => {
       const audience = inferAudienceTypesForBusiness(typeCode)[0];
       audienceCapacities[audience] += Number(capacity || 0);
     });
   } else {
-    audienceCapacities[primaryAudience] = Number(slot.capacity || 0);
+    audienceCapacities[primaryAudience] = Number(normalized.capacity || 0);
   }
-  return { ...slot, capacityMode: "fixed", audienceCapacities, audienceBooked };
+  return { ...normalized, capacityMode: "fixed", audienceCapacities, audienceBooked };
 }
 
 function normalizeBooking(booking) {
-  const autoNoShow = booking.status === "autoCompleted";
-  const terminal = [BookingStatus.COMPLETED, BookingStatus.NO_SHOW, BookingStatus.AUTO_NO_SHOW].includes(autoNoShow ? BookingStatus.AUTO_NO_SHOW : booking.status);
+  const normalized = { ...booking };
+  delete normalized.workFaceId;
+  if (normalized.adjustedSchedule) {
+    normalized.adjustedSchedule = { ...normalized.adjustedSchedule };
+    delete normalized.adjustedSchedule.workFaceId;
+  }
+  const autoNoShow = normalized.status === "autoCompleted";
+  const terminal = [BookingStatus.COMPLETED, BookingStatus.NO_SHOW, BookingStatus.AUTO_NO_SHOW].includes(autoNoShow ? BookingStatus.AUTO_NO_SHOW : normalized.status);
   return {
-    ...booking,
-    status: autoNoShow ? BookingStatus.AUTO_NO_SHOW : booking.status,
-    currentSlotId: booking.currentSlotId || booking.slotId,
-    audienceType: booking.audienceType || audienceTypeForUnit(booking.unitType) || inferAudienceTypesForBusiness(booking.typeCode)[0],
-    processStatus: booking.processStatus || (terminal ? "closed" : "open"),
-    arrivalStatus: booking.arrivalStatus || (autoNoShow || booking.status === BookingStatus.NO_SHOW ? "notArrived" : booking.status === BookingStatus.COMPLETED ? "onTime" : "pending"),
-    closureType: booking.closureType || (autoNoShow || booking.status === BookingStatus.NO_SHOW ? "noShow" : booking.status === BookingStatus.COMPLETED ? "normal" : null),
-    closureMethod: booking.closureMethod || (autoNoShow ? "auto" : terminal ? "manual" : null)
+    ...normalized,
+    status: autoNoShow ? BookingStatus.AUTO_NO_SHOW : normalized.status,
+    currentSlotId: normalized.currentSlotId || normalized.slotId,
+    audienceType: normalized.audienceType || audienceTypeForUnit(normalized.unitType) || inferAudienceTypesForBusiness(normalized.typeCode)[0],
+    processStatus: normalized.processStatus || (terminal ? "closed" : "open"),
+    arrivalStatus: normalized.arrivalStatus || (autoNoShow || normalized.status === BookingStatus.NO_SHOW ? "notArrived" : normalized.status === BookingStatus.COMPLETED ? "onTime" : "pending"),
+    closureType: normalized.closureType || (autoNoShow || normalized.status === BookingStatus.NO_SHOW ? "noShow" : normalized.status === BookingStatus.COMPLETED ? "normal" : null),
+    closureMethod: normalized.closureMethod || (autoNoShow ? "auto" : terminal ? "manual" : null)
   };
 }
 

@@ -148,6 +148,26 @@ function testAutoNoShowClosureIsIdempotent() {
   assert.equal(api.state.users.find((item) => item.id === "user-supplier-1").noShowCount, before + 1);
 }
 
+function testAdminProxyUsesWarehouseAdminIdentity() {
+  const api = createApi(createInitialState(), () => {});
+  const slot = api.listBookableSlots({ audienceType: "carrier" }).find((item) => item.slotPlanId === "slot-0803-0830");
+  assert.ok(slot);
+
+  const result = api.submitBooking({
+    slotId: slot.id,
+    typeCode: "TRANSFER_IN",
+    unitType: "carrier",
+    companyName: "仓库内部调配",
+    contactName: "张建国",
+    contactPhone: "13811112222",
+    source: "adminProxy"
+  }, "张建国");
+
+  assert.equal(result.ok, true);
+  assert.equal(result.booking.requesterUserId, "admin-warehouse-1");
+  assert.equal(result.booking.source, "adminProxy");
+}
+
 testSlotStateMachine();
 testBookingLifecycle();
 testCancelWindowAndRestriction();
@@ -156,5 +176,6 @@ testAudienceCapacityIsolation();
 testSharedCapacityAcrossAudiences();
 testExceptionAdjustmentClosure();
 testAutoNoShowClosureIsIdempotent();
+testAdminProxyUsesWarehouseAdminIdentity();
 
 console.log("smoke tests passed");
